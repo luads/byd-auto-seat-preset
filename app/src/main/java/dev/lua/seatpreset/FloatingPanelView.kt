@@ -17,7 +17,7 @@ object FloatingPanelView {
     fun dp(n: Int) = (n * context.resources.displayMetrics.density).toInt()
     fun shape(color: Int, radius: Int) = GradientDrawable().apply {
       setColor(color); cornerRadius = dp(radius).toFloat()
-      setStroke(dp(1), context.getColor(R.color.matte_border))
+      setStroke(dp(1), 0xFF303841.toInt())
     }
     fun label(value: String, size: Float, color: Int) = TextView(context).apply {
       text = value; textSize = size; setTextColor(context.getColor(color))
@@ -40,18 +40,19 @@ object FloatingPanelView {
       val target = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
         setPadding(dp(8), dp(6), dp(8), dp(8))
-        val tile = shape(context.getColor(R.color.matte_raised), 14).apply { setStroke(dp(1), 0xFF526273.toInt()) }
+        val tile = shape(context.getColor(R.color.matte_raised), 18)
         background = RippleDrawable(ColorStateList.valueOf(0x445AA8ED), tile, null)
-        elevation = dp(2).toFloat()
+        elevation = dp(1).toFloat()
         isClickable = true; isFocusable = true
         contentDescription = "Recall preset for ${preset.name}"
         setOnClickListener { recall(preset.id) }
       }
       target.addView(ImageView(context).apply {
         setImageResource(R.drawable.seat_matte); scaleType = ImageView.ScaleType.FIT_CENTER
+        setPadding(dp(12), dp(6), dp(12), dp(6))
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
       }, LinearLayout.LayoutParams(-1, 0, 1f))
-      target.addView(label(preset.name, 21f, R.color.matte_silver).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-1, -2))
+      target.addView(label(preset.name, 23f, R.color.matte_silver).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-1, -2))
       if (preset.position == null) {
         target.addView(label("Not saved", 12f, R.color.matte_muted).apply { gravity = Gravity.CENTER })
         target.isEnabled = false; target.alpha = 0.65f

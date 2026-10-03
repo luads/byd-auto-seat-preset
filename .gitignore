@@ -21,3 +21,9 @@ docs/UI-REVIEW-016.md
 # Keep exploratory artwork/history local; packaged UI assets live under app/src.
 docs/design/
 docs/EXPLORATION.md
+
+# Generic screenshots reviewed for the dark UI release.
+!docs/screenshots/presets-dark-review.png
+!docs/screenshots/settings-dark-review.png
+!docs/screenshots/settings-dark-review-narrow.png
+!docs/screenshots/presets-dark-review-narrow.png

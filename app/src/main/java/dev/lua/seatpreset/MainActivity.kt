@@ -65,7 +65,7 @@ class MainActivity : Activity() {
     StorageAccess.requireUnlocked(this)
     page = LinearLayout(this).apply {
       orientation = LinearLayout.VERTICAL
-      setPadding(dp(32), dp(24), dp(32), dp(32))
+      setPadding(dp(32), dp(40), dp(32), dp(40))
       setBackgroundColor(backgroundColor)
     }
     val header = row()
@@ -74,56 +74,56 @@ class MainActivity : Activity() {
     page.addView(header)
     page.addView(text(if (BuildConfig.DEMO) "DEMO · simulated vehicle, no physical movement" else "PRE-ALPHA · two favourite driving presets", 15f, mutedColor))
     if (settings) renderSettings() else if (demoControls && BuildConfig.DEMO) renderDemo() else renderPresets()
-    setContentView(ScrollView(this).apply { setBackgroundColor(backgroundColor); addView(page) })
+    val frame = FrameLayout(this).apply {
+      addView(page, FrameLayout.LayoutParams(dp(minOf(resources.configuration.screenWidthDp, 1280)), -2, android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL))
+    }
+    setContentView(ScrollView(this).apply { setBackgroundColor(backgroundColor); addView(frame) })
   }
 
   private fun renderPresets() {
     val vehicle = Vehicle.adapter(this)
-    val block = if (BuildConfig.DEMO) RecallPolicy.blockReason(vehicle.snapshot(), android.os.SystemClock.elapsedRealtime()) else "Live seat control is coming soon"
+    val block = if (BuildConfig.DEMO) RecallPolicy.blockReason(vehicle.snapshot(), android.os.SystemClock.elapsedRealtime()) else "Seat control is not available in this pre-alpha"
     page.addView(text(block ?: "P · parking brake confirmed", 16f, if (block == null) getColor(R.color.matte_ready) else getColor(R.color.matte_caution)))
     val wide = resources.configuration.screenWidthDp >= 600
-    val landscapeArt = resources.configuration.screenWidthDp >= 1100
-    (store.favourites() + store.all().filter { p -> store.favourites().none { it.id == p.id } }).chunked(if (wide) 2 else 1).forEach { pair ->
+    val favourites = store.favourites()
+    (favourites + store.all().filter { p -> favourites.none { it.id == p.id } }).chunked(if (wide) 2 else 1).forEach { pair ->
       val cards = LinearLayout(this).apply { orientation = if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL }
       pair.forEach { preset ->
+        val saved = preset.position != null
         val card = LinearLayout(this).apply {
           orientation = LinearLayout.VERTICAL
-          background = rounded(panelColor, 20, true)
-          setPadding(dp(24), dp(20), dp(24), dp(24))
+          background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x335AA8ED), rounded(panelColor, 28), null)
+          setPadding(dp(28), dp(24), dp(28), dp(28))
+          if (BuildConfig.DEMO) {
+            isClickable = true; isFocusable = true
+            contentDescription = if (saved) "Use preset for ${preset.name}" else "Save position for ${preset.name}"
+            setOnClickListener {
+              runCatching {
+                if (!saved) capture(preset) else { toast(Vehicle.recall(this@MainActivity, preset).message); render() }
+              }.onFailure { toast(it.message ?: "Action failed") }
+            }
+          }
         }
         val heading = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
         heading.addView(text(preset.name, 32f).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, -2, 1f))
-        if (store.favourites().any { it.id == preset.id }) {
-          heading.addView(ImageView(this).apply { setImageResource(R.drawable.ic_favourite); contentDescription = "Favourite" }, LinearLayout.LayoutParams(dp(24), dp(24)))
-        }
+        heading.addView(action("Edit") { editPreset(preset) }.apply {
+          contentDescription = "Edit ${preset.name}"
+          background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x335AA8ED), rounded(Color.TRANSPARENT, 14), null)
+          setTextColor(mutedColor)
+        })
         card.addView(heading)
-        val body = LinearLayout(this).apply {
-          orientation = if (landscapeArt) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-          gravity = android.view.Gravity.CENTER_VERTICAL
-        }
-        val artwork = ImageView(this).apply {
-          setImageResource(R.drawable.seat_matte)
-          scaleType = ImageView.ScaleType.FIT_CENTER
+        card.addView(text(if (favourites.any { it.id == preset.id }) "FAVOURITE" else "PRESET", 12f, mutedColor))
+        card.addView(ImageView(this).apply {
+          setImageResource(R.drawable.seat_matte); scaleType = ImageView.ScaleType.FIT_CENTER
           importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }
-        body.addView(artwork, LinearLayout.LayoutParams(if (landscapeArt) dp(260) else -1, dp(if (landscapeArt) 280 else 176)))
-        val controls = LinearLayout(this).apply {
-          orientation = LinearLayout.VERTICAL
-          if (landscapeArt) setPadding(dp(24), 0, 0, 0)
-        }
-        controls.addView(text(if (preset.position == null) if (BuildConfig.DEMO) "Save your driving position to start" else "Seat connection coming soon" else "Position saved${preset.capturedAtMs?.let { " · " + java.text.DateFormat.getDateInstance(java.text.DateFormat.SHORT).format(java.util.Date(it)) } ?: ""}", 16f, mutedColor))
-        controls.addView(primaryAction(if (!BuildConfig.DEMO) "Coming soon" else if (preset.position == null) "Save position" else "Use preset") {
-          if (preset.position == null) capture(preset) else {
-            val result = Vehicle.recall(this, preset)
-            toast(result.message)
-            render()
-          }
-        }.apply { isEnabled = BuildConfig.DEMO; if (!BuildConfig.DEMO) { background = rounded(getColor(R.color.matte_raised), 14); setTextColor(mutedColor) } }, LinearLayout.LayoutParams(-1, dp(72)).apply { topMargin = dp(8); bottomMargin = dp(12) })
-        controls.addView(action("Edit preset") { editPreset(preset) })
-        body.addView(controls, if (landscapeArt) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2))
-        card.addView(body)
+          setPadding(0, dp(16), 0, dp(16))
+        }, LinearLayout.LayoutParams(-1, dp(if (wide) 240 else 180)))
+        val footer = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL; if (!wide) orientation = LinearLayout.VERTICAL }
+        footer.addView(text(if (saved) "Position saved" else "No position saved", 16f, mutedColor), if (wide) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2))
+        footer.addView(text(if (!BuildConfig.DEMO) "Unavailable" else if (saved) "Use preset  →" else "Save position  +", 18f, if (BuildConfig.DEMO) accentColor else mutedColor))
+        card.addView(footer)
         val params = if (wide) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2)
-        params.setMargins(dp(6), dp(16), dp(6), dp(16))
+        params.setMargins(dp(6), dp(24), dp(6), dp(16))
         cards.addView(card, params)
       }
       page.addView(cards)
@@ -135,11 +135,11 @@ class MainActivity : Activity() {
       addView(text("Last request", 13f, mutedColor))
       addView(text(store.result, 18f))
     }
-    if (!store.result.startsWith("Select either favourite")) page.addView(result)
+    if (BuildConfig.DEMO && !store.result.startsWith("Select either favourite")) page.addView(result)
     store.storageMessage()?.let { page.addView(text(it, 16f, getColor(R.color.matte_caution))) }
     val actions = row().apply { if (!wide) orientation = LinearLayout.VERTICAL }
     actions.addView(action("Add preset") { nameDialog("New preset", "") { name -> store.save(store.all() + Preset(UUID.randomUUID().toString(), name)); changed() } })
-    actions.addView(action("Add home widget") { pinWidget() })
+    actions.addView(action("Home panel") { settings = true; render() })
     if (BuildConfig.DEMO && store.developerMode) actions.addView(action("Demo controls") { demoControls = true; render() })
     for (index in 0 until actions.childCount) {
       actions.getChildAt(index).layoutParams = LinearLayout.LayoutParams(-2, -2).apply { marginEnd = dp(12); bottomMargin = dp(8) }
@@ -190,7 +190,7 @@ class MainActivity : Activity() {
     fun group(title: String, body: () -> Unit) {
       val section = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(16), dp(20), dp(20))
-        background = rounded(panelColor, 20, true)
+        background = rounded(panelColor, 24)
       }
       page = section
       page.addView(text(title, 22f))
@@ -201,12 +201,14 @@ class MainActivity : Activity() {
     }
     group("Drivers") {
       store.favourites().forEachIndexed { slot, preset ->
-        page.addView(text(preset.name, 24f))
-        val controls = row().apply { if (resources.configuration.screenWidthDp < 700) orientation = LinearLayout.VERTICAL }
-        controls.addView(action("Rename driver ${slot + 1}") { nameDialog("Driver name", preset.name) { name ->
+        val driverHeading = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
+        driverHeading.addView(text(preset.name, 24f).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, -2, 1f))
+        val controls = row()
+        driverHeading.addView(action("Rename") { nameDialog("Driver name", preset.name) { name ->
           store.save(store.all().map { if (it.id == preset.id) it.copy(name = name) else it }); changed()
-        } }, LinearLayout.LayoutParams(if (resources.configuration.screenWidthDp < 700) -1 else 0, -2, if (resources.configuration.screenWidthDp < 700) 0f else 1f).apply { bottomMargin = dp(8) })
-        controls.addView(action("Choose preset ${slot + 1}") {
+        } }.apply { contentDescription = "Rename driver ${slot + 1}" }, LinearLayout.LayoutParams(-2, dp(56)))
+        page.addView(driverHeading)
+        controls.addView(action("Choose preset") {
           val all = store.all()
           AlertDialog.Builder(this).setTitle("Choose favourite ${slot + 1}").setItems(all.map { it.name }.toTypedArray()) { _, i ->
             runCatching { store.setFavourite(slot, all[i]); changed() }.onFailure { toast(it.message ?: "Could not save favourite") }
@@ -512,7 +514,7 @@ class MainActivity : Activity() {
   }
   private fun action(label: String, click: () -> Unit) = Button(this).apply {
     text = label; isAllCaps = false; textSize = 17f; minHeight = dp(56)
-    setTextColor(textColor); background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x224A90D9), rounded(getColor(R.color.matte_raised), 14), null)
+    setTextColor(textColor); background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x224A90D9), rounded(if (settings) Color.rgb(38, 44, 51) else getColor(R.color.matte_raised), 14), null)
     stateListAnimator = null
     setPadding(dp(20), dp(12), dp(20), dp(12))
     setOnClickListener { runCatching(click).onFailure { toast(it.message ?: "Action failed") } }
