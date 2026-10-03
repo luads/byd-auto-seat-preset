@@ -1,0 +1,2 @@
+<resources><string name="home_visibility_description">Shows the two favourite presets after a home-screen window event. Reads window identities, not screen content. Does not press buttons or capture keys.</string>  <string name="storage_not_ready">Storage is not ready. Tap to retry.</string>
+</resources>

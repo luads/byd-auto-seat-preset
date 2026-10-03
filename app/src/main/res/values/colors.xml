@@ -1,0 +1,8 @@
+<resources>
+  <color name="matte_canvas">#14171B</color><color name="matte_surface">#20252B</color>
+  <color name="matte_raised">#2B323B</color><color name="matte_border">#424D59</color>
+  <color name="matte_silver">#E5E9EF</color><color name="matte_muted">#A8B3C1</color>
+  <color name="matte_blue">#5AA8ED</color><color name="matte_ink">#101820</color>
+  <color name="matte_ready">#83C5AD</color><color name="matte_caution">#E2B977</color>
+  <color name="launcher_background">#1C1F22</color>
+</resources>

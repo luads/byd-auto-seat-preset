@@ -1,0 +1,23 @@
+.gradle/
+**/build/
+local.properties
+.env
+*.jks
+*.keystore
+*.apk
+.DS_Store
+__pycache__/
+
+# Historical screenshots/boards may include local driver preferences.
+docs/screenshots/*
+!docs/screenshots/presets-018.png
+!docs/screenshots/settings-018.png
+!docs/screenshots/panel-018.png
+docs/design/matte-cockpit/identity-board.png
+
+docs/LOCAL-HISTORY.md
+docs/UI-REVIEW-016.md
+
+# Keep exploratory artwork/history local; packaged UI assets live under app/src.
+docs/design/
+docs/EXPLORATION.md

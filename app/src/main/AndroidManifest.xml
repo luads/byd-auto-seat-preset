@@ -1,0 +1,28 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+  <!-- Owner grants this once with pm grant; installation alone does not grant it. -->
+  <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+  <application android:name=".SeatApp" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/AppTheme" android:allowBackup="false" android:usesCleartextTraffic="false">
+    <activity android:name=".ChildReplayActivity" android:exported="false" />
+    <activity android:name=".MotionPreviewActivity" android:exported="false" />
+    <activity android:name=".MainActivity" android:exported="true">
+      <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+    </activity>
+    <service android:name=".HomeVisibilityService" android:exported="true" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+      <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
+      <meta-data android:name="android.accessibilityservice" android:resource="@xml/home_visibility" />
+    </service>
+    <service android:name=".FloatingPanelService" android:exported="false" />
+    <receiver android:name=".PresetWidget" android:exported="false">
+      <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/preset_widget" />
+    </receiver>
+    <receiver android:name=".StartupReceiver" android:exported="false">
+      <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /><action android:name="android.intent.action.MY_PACKAGE_REPLACED" /></intent-filter>
+    </receiver>
+    <provider android:name=".UpdateApkProvider" android:authorities="${applicationId}.updates" android:exported="false" android:grantUriPermissions="true" />
+  </application>
+</manifest>

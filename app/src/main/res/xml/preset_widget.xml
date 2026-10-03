@@ -1,0 +1,5 @@
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+  android:minWidth="320dp" android:minHeight="196dp" android:minResizeWidth="300dp" android:minResizeHeight="184dp"
+  android:initialLayout="@layout/preset_widget"
+  android:previewImage="@drawable/seat_matte" android:resizeMode="horizontal|vertical"
+  android:updatePeriodMillis="0" android:widgetCategory="home_screen" />
