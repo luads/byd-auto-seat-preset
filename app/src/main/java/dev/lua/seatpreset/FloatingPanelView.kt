@@ -13,7 +13,7 @@ import android.widget.TextView
 
 /** Shared native preview and overlay view. Callbacks are wired only by the caller. */
 object FloatingPanelView {
-  fun create(context: Context, close: () -> Unit, recall: (String) -> Unit): View {
+  fun create(context: Context, close: () -> Unit, recall: (String) -> Unit, previewOnly: Boolean = false): View {
     fun dp(n: Int) = (n * context.resources.displayMetrics.density).toInt()
     fun shape(color: Int, radius: Int) = GradientDrawable().apply {
       setColor(color); cornerRadius = dp(radius).toFloat()
@@ -53,8 +53,8 @@ object FloatingPanelView {
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
       }, LinearLayout.LayoutParams(-1, 0, 1f))
       target.addView(label(preset.name, 23f, R.color.matte_silver).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(-1, -2))
-      if (preset.position == null) {
-        target.addView(label("Not saved", 12f, R.color.matte_muted).apply { gravity = Gravity.CENTER })
+      if (!previewOnly && (preset.position == null || !Vehicle.adapter(context).recallValidated)) {
+        target.addView(label(if (preset.position == null) "Not saved" else "Unavailable", 12f, R.color.matte_muted).apply { gravity = Gravity.CENTER })
         target.isEnabled = false; target.alpha = 0.65f
       }
       targets.addView(target, LinearLayout.LayoutParams(0, -1, 1f).apply { if (slot == 0) marginEnd = dp(5) else marginStart = dp(5) })

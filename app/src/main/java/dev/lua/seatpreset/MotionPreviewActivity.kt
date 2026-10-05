@@ -22,7 +22,7 @@ class MotionPreviewActivity : Activity() {
     page.addView(label("P shows the panel. Other gears and missing or stale readings hide it. No seat movement.", 16f))
     val status = label("No gear reading", 18f); page.addView(status)
     val stage = FrameLayout(this)
-    val panel = FloatingPanelView.create(this, { finish() }) { Toast.makeText(this, "Layout preview only", Toast.LENGTH_SHORT).show() }
+    val panel = FloatingPanelView.create(this, { finish() }, { Toast.makeText(this, "Layout preview only", Toast.LENGTH_SHORT).show() })
     panel.visibility = View.INVISIBLE
     stage.addView(panel, FrameLayout.LayoutParams(dp(minOf(460, resources.configuration.screenWidthDp - 64)), dp(230), Gravity.CENTER))
     val buttons = LinearLayout(this)

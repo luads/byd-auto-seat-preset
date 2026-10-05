@@ -71,10 +71,10 @@ class HomeVisibilityService : AccessibilityService() {
     if (fading) removePanel()
     val view = FloatingPanelView.create(this, {
       HomePanelSettings(this).enabled = false; hide()
-    }) { id ->
+    }, { id ->
       val preset = PresetStore(this).all().firstOrNull { it.id == id }
       if (preset != null) Toast.makeText(this, Vehicle.recall(this, preset).message, Toast.LENGTH_LONG).show()
-    }
+    })
     val params = PanelPlacement.params(this)
     windows.addView(view, params); panel = view
     PanelPlacement.draggable(this, view, windows, params)

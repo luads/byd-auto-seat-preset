@@ -27,11 +27,9 @@ class FloatingPanelService : Service() {
     if (panel != null) return START_NOT_STICKY
     windows = getSystemService(WINDOW_SERVICE) as WindowManager
     runCatching {
-      val view = FloatingPanelView.create(this, { stopSelf() }) { id ->
-        val preset = PresetStore(this).all().firstOrNull { it.id == id }
-        if (preset != null) Toast.makeText(this, Vehicle.recall(this, preset).message, Toast.LENGTH_LONG).show()
-        stopSelf()
-      }
+      val view = FloatingPanelView.create(this, { stopSelf() }, {
+        Toast.makeText(this, "Display preview only. No seat movement.", Toast.LENGTH_SHORT).show()
+      }, previewOnly = true)
       val params = PanelPlacement.params(this)
       windows.addView(view, params)
       panel = view

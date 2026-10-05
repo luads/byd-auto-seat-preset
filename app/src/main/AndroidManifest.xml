@@ -5,7 +5,19 @@
   <!-- Owner grants this once with pm grant; installation alone does not grant it. -->
   <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
   <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+  <queries><package android:name="com.byd.data.collect" /></queries>
+  <uses-permission android:name="android.permission.BYDAUTO_SETTING_COMMON" />
+  <uses-permission android:name="android.permission.BYDAUTO_SETTING_GET" />
+  <uses-permission android:name="android.permission.BYDAUTO_SETTING_SET" />
+  <uses-permission android:name="android.permission.BYDAUTO_DOOR_LOCK_COMMON" />
+  <uses-permission android:name="android.permission.BYDAUTO_DOOR_LOCK_GET" />
+  <uses-permission android:name="android.permission.BYDAUTO_GEARBOX_COMMON" />
+  <uses-permission android:name="android.permission.BYDAUTO_GEARBOX_GET" />
   <application android:name=".SeatApp" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/AppTheme" android:allowBackup="false" android:usesCleartextTraffic="false">
+    <activity android:name=".SeatMovementTrialActivity" android:exported="false" />
+    <activity android:name=".SeatCaptureActivity" android:exported="false" />
+    <activity android:name=".ChildTrialActivity" android:exported="false" />
+    <provider android:name=".BackupProvider" android:authorities="${applicationId}.backups" android:exported="false" android:grantUriPermissions="true" />
     <activity android:name=".ChildReplayActivity" android:exported="false" />
     <activity android:name=".MotionPreviewActivity" android:exported="false" />
     <activity android:name=".MainActivity" android:exported="true">

@@ -1,6 +1,6 @@
 # Capture and recall validation plan
 
-The emulator proves storage and controller behavior. It cannot prove that an OEM getter reports actual coordinates, that a setter affects the intended seat, or that a real movement stops safely. Live capture/apply remain disabled.
+The emulator proves storage and controller behavior. It cannot prove that an OEM getter reports actual coordinates, that a setter affects the intended seat, or that a real movement stops safely. Normal live recall remains disabled. The owner-triggered seat observation and one-axis supervised trial are documented in FIELD-TRIALS.md. Those experimental observations do not constitute validated automatic recall.
 
 ## Read-only contract work
 

@@ -119,7 +119,7 @@ class MainActivity : Activity() {
           setPadding(0, dp(16), 0, dp(16))
         }, LinearLayout.LayoutParams(-1, dp(if (wide) 240 else 180)))
         val footer = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL; if (!wide) orientation = LinearLayout.VERTICAL }
-        footer.addView(text(if (saved) "Position saved" else "No position saved", 16f, mutedColor), if (wide) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2))
+        footer.addView(text(if (preset.position?.coordinateFormat == SeatObservation.FORMAT) "Experimental readings saved" else if (saved) "Position saved" else "No position saved", 16f, mutedColor), if (wide) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2))
         footer.addView(text(if (!BuildConfig.DEMO) "Unavailable" else if (saved) "Use preset  →" else "Save position  +", 18f, if (BuildConfig.DEMO) accentColor else mutedColor))
         card.addView(footer)
         val params = if (wide) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2)
@@ -233,7 +233,12 @@ class MainActivity : Activity() {
     group("Home panel") {
       val panelSettings = HomePanelSettings(this)
       page.addView(text("Two favourites, one tap. Shown on home while the car is in P. Drag the header to move it.", 16f, mutedColor))
-      if (!BuildConfig.DEMO) page.addView(text("Gear connection is not ready yet. The panel stays hidden until gear data is available.", 15f, getColor(R.color.matte_caution)))
+      if (!BuildConfig.DEMO) page.addView(text("Automatic P-only display is unavailable in this build. Test panel below shows a display-only preview for 30 seconds, without gear data or seat movement.", 15f, getColor(R.color.matte_caution)))
+      page.addView(text("Overlay access: ${if (Settings.canDrawOverlays(this)) "ready" else "needs setup"} · Home detection: ${if (HomeVisibilityService.instance != null) "connected" else if (panelSettings.observerEnabled()) "waiting for Android" else "needs setup"}", 15f, mutedColor))
+      page.addView(action("Test panel · 30 seconds") {
+        if (!Settings.canDrawOverlays(this)) toast("Set up home panel access first")
+        else { startService(Intent(this, FloatingPanelService::class.java).setAction(FloatingPanelService.ACTION_SHOW)); startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)); }
+      })
       page.addView(action("Set up home panel") {
         AlertDialog.Builder(this).setTitle("Enable home panel access?")
           .setMessage("Allow this app to display on home, detect when home is visible, and prepare its startup connection. Uses this device's authorized setup connection. Android may ask to Allow debugging once. The observer does not read screen content or press buttons.")
@@ -241,7 +246,7 @@ class MainActivity : Activity() {
       }.apply { isEnabled = !panelSetupBusy })
       if (panelSetupMessage.isNotBlank()) page.addView(text(panelSetupMessage, 15f, mutedColor))
       page.addView(Switch(this).apply {
-        text = "Show favourites on home"; setTextColor(textColor); minHeight = dp(52); isChecked = panelSettings.enabled
+        text = if (BuildConfig.DEMO) "Show favourites on home" else "Enable home panel when P data is ready"; setTextColor(textColor); minHeight = dp(52); isChecked = panelSettings.enabled
         setOnCheckedChangeListener { _, on ->
           if (on && (!Settings.canDrawOverlays(this@MainActivity) || !panelSettings.observerEnabled())) { toast("Set up home panel first"); isChecked = false }
           else { panelSettings.enabled = on; HomeVisibilityService.instance?.hide() }
@@ -257,7 +262,7 @@ class MainActivity : Activity() {
         })
       })
       val previewWidth = minOf(PanelPlacement.width(this), if (wide) resources.configuration.screenWidthDp / 2 - 96 else resources.configuration.screenWidthDp - 104)
-      page.addView(FloatingPanelView.create(this, { toast("The close button turns off the home panel") }) { toast("Appearance preview only") },
+      page.addView(FloatingPanelView.create(this, { toast("The close button turns off the home panel") }, { toast("Appearance preview only") }),
         LinearLayout.LayoutParams(dp(previewWidth), dp(previewWidth / 2)).apply { topMargin = dp(8); bottomMargin = dp(16) })
       val placement = row().apply { if (resources.configuration.screenWidthDp < 600) orientation = LinearLayout.VERTICAL }
       placement.addView(action("Reset placement") { PanelPlacement.reset(this); render() }, LinearLayout.LayoutParams(if (resources.configuration.screenWidthDp < 600) -1 else -2, -2).apply { bottomMargin = dp(8) })
@@ -319,6 +324,25 @@ class MainActivity : Activity() {
 
   private var exportContents: String? = null
   private fun exportPresets() {
+    AlertDialog.Builder(this).setTitle("Export presets · personal data")
+      .setItems(arrayOf("Save to a file", "Share backup…")) { _, choice ->
+        runCatching { if (choice == 0) saveBackupFile() else shareBackup() }
+          .onFailure { WidgetDiagnostics.record(this, "backup export failed type=${it.javaClass.simpleName}"); toast("File export is unavailable. Try Export presets → Share backup.") }
+      }.setNegativeButton("Cancel", null).show()
+  }
+  private fun shareBackup() {
+    val raw = store.exportDocument()
+    val directory = java.io.File(cacheDir, "backups").apply { check(isDirectory || mkdirs()) }
+    directory.listFiles()?.filter { it.name.startsWith("backup-") }?.sortedByDescending { it.lastModified() }?.drop(3)?.forEach { it.delete() }
+    val file = java.io.File(directory, "backup-${UUID.randomUUID()}.json")
+    java.io.FileOutputStream(file).use { it.write(raw.toByteArray(Charsets.UTF_8)); it.fd.sync() }
+    check(file.readText() == raw) { "Backup write failed" }
+    val uri = Uri.parse("content://$packageName.backups/${file.name}")
+    val send = Intent(Intent.ACTION_SEND).setType("application/json").putExtra(Intent.EXTRA_STREAM, uri)
+      .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply { clipData = android.content.ClipData.newRawUri("Preset backup", uri) }
+    startActivity(Intent.createChooser(send, "Save or share preset backup"))
+  }
+  private fun saveBackupFile() {
     exportContents = store.exportDocument()
     startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE, "seat-presets.json"), 41)
   }
@@ -342,11 +366,20 @@ class MainActivity : Activity() {
           .setMessage("Import ${doc.presets.size} presets, including ${doc.favourites.joinToString(" and ") { id -> doc.presets.first { it.id == id }.name }} as favourites? Names and positions will replace this app's saved presets. No seat movement.")
           .setNegativeButton("Cancel", null).setPositiveButton("Import") { _, _ -> runCatching { store.importDocument(raw); changed(); toast("Presets imported") }.onFailure { toast("Import failed. Existing presets were kept.") } }.show()
       }
-    }.onFailure { toast(it.message ?: "Could not read preset file") }
+    }.onFailure { WidgetDiagnostics.record(this, "backup result failed request=$requestCode type=${it.javaClass.simpleName}"); toast("Backup failed. Your saved presets were kept. Try Share backup if file export fails.") }
   }
 
   private fun renderDeveloperSettings() {
+    if (!BuildConfig.DEMO) page.addView(action("Supervised seat movement trial") { startActivity(Intent(this, SeatMovementTrialActivity::class.java)) })
+    page.addView(action("Child-lock input trial · screen only") { startActivity(Intent(this, ChildTrialActivity::class.java)) })
     page.addView(text("Developer tools", 22f, accentColor))
+    page.addView(action("View private trial report") {
+      val report = TextView(this).apply { text = PrivateDiagnostics.report(this@MainActivity); setPadding(dp(16), dp(16), dp(16), dp(16)); setTextIsSelectable(true) }
+      AlertDialog.Builder(this).setTitle("Private seat/input observations").setView(ScrollView(this).apply { addView(report) }).setPositiveButton("Close", null).show()
+    })
+    page.addView(action("Clear private trial report") {
+      AlertDialog.Builder(this).setTitle("Clear private observations?").setNegativeButton("Cancel", null).setPositiveButton("Clear") { _, _ -> PrivateDiagnostics.clear(this) }.show()
+    })
     val panelSettings = HomePanelSettings(this)
     page.addView(Switch(this).apply {
       text = "Ignore gear for layout testing"; setTextColor(textColor); minHeight = dp(52); isChecked = !panelSettings.parkOnly
@@ -438,7 +471,7 @@ class MainActivity : Activity() {
   private fun editPreset(preset: Preset) {
     AlertDialog.Builder(this).setTitle(preset.name).setItems(arrayOf("Save current position…", "Rename", "Use as favourite 1", "Use as favourite 2")) { _, choice ->
       when (choice) {
-        0 -> capture(preset)
+        0 -> if (BuildConfig.DEMO) capture(preset) else startActivity(Intent(this, SeatCaptureActivity::class.java).putExtra("preset-id", preset.id))
         1 -> nameDialog("Rename preset", preset.name) { name -> store.save(store.all().map { if (it.id == preset.id) it.copy(name = name) else it }); changed() }
         else -> { runCatching { store.setFavourite(choice - 2, preset); changed() }.onFailure { toast(it.message ?: "Could not save favourite") } }
       }
