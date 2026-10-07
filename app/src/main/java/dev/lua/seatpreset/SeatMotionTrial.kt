@@ -15,6 +15,7 @@ internal class SeatMotionTrial {
       samples += position; lastRecordedAt = atMs
     } catch (e: Exception) { reset(); throw e }
   }
+  @Synchronized fun nextStep() = when (samples.size) { 1 -> "B (saved position)"; 2 -> "A (starting position)"; else -> "A (starting position)" }
   @Synchronized fun validated(axis: String): Boolean {
     if (axis !in SeatObservation.axes || samples.size != 3) return false
     val (a,b,c) = samples
@@ -27,7 +28,7 @@ internal class SeatMotionTrial {
     require(now >= lastRecordedAt && now - lastRecordedAt <= 300_000 && validated(axis)) { "Verify this axis with native A → B → A first" }
     require(now >= 0 && current.source == samples.first().source && SeatObservation.repeatable(target,target) && current.source == target.source && current.coordinateFormat == target.coordinateFormat && SeatObservation.usable(current.coordinates))
     val from = current.coordinates.getValue(axis); val to = target.coordinates.getValue(axis)
-    require(from > 0 && from < 100 && to > 0 && to < 100 && from == from.toInt().toDouble() && to == to.toInt().toDouble() && kotlin.math.abs(to-from) in 1.0..2.0) { "First trial must move one axis by only 1–2 candidate units" }
+    require(from > 0 && from < 100 && to > 0 && to < 100 && from == from.toInt().toDouble() && to == to.toInt().toDouble() && from != to && from in minOf(samples[0].coordinates.getValue(axis), samples[1].coordinates.getValue(axis))..maxOf(samples[0].coordinates.getValue(axis), samples[1].coordinates.getValue(axis)) && to in minOf(samples[0].coordinates.getValue(axis), samples[1].coordinates.getValue(axis))..maxOf(samples[0].coordinates.getValue(axis), samples[1].coordinates.getValue(axis))) { "Target must stay within the native positions recorded for this axis" }
     return Pending(axis,to.toInt(),current.source,now).also { pending=it }
   }
   @Synchronized fun consume(now: Long, parkedEvidence: VehicleSnapshot, foreground: Boolean): Pending {

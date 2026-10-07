@@ -26,7 +26,7 @@ object PanelPermissionSetup {
     check(afterOverlay && afterWrite) { "Permission grant could not be verified" }
     HomePanelSettings(context).setObserver(true)
     HomePanelSettings(context).enabled = true
-    return "Home access is ready. Use Test panel for a 30-second preview. Automatic display still requires supported P data."
+    return "Home panel is ready. Return to home while in P."
     } finally {
       WidgetDiagnostics.record(context, "panel setup overlay=$beforeOverlay->${Settings.canDrawOverlays(context)} startup=$beforeWrite->${Startup.canWrite(context)}")
     }

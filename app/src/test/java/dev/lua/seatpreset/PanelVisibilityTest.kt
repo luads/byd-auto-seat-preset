@@ -22,4 +22,14 @@ class PanelVisibilityTest {
     assertFalse(PanelVisibility.allowed(false, true, fresh, 1500, false))
     assertFalse(PanelVisibility.allowed(true, false, fresh, 1500, false))
   }
+  @Test fun reportedParkVisibilityNeverIgnoresHomeEnableOrScreenOff() {
+    assertTrue(PanelVisibility.reportedPark(true,true,true,1))
+    assertFalse(PanelVisibility.reportedPark(false,true,true,1))
+    assertFalse(PanelVisibility.reportedPark(true,false,true,1))
+    assertFalse(PanelVisibility.reportedPark(true,true,false,1))
+    for (gear in listOf(null,0,2,3,4,5)) assertFalse(PanelVisibility.reportedPark(true,true,true,gear))
+    // Showing reported P does not change the movement freshness interlock.
+    assertNotNull(RecallPolicy.blockReason(VehicleSnapshot(Gear.P,true,null,null),1500))
+  }
+
 }

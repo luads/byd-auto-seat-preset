@@ -57,3 +57,7 @@ Do not edit SystemUI preferences, replace stock packages or spoof an allowed sho
 ## Implemented follow-up, 0.1.4
 
 The opt-in panel now has saved dragging and sizing plus a limited window-identity accessibility observer. The owner explicitly approved its persistent access and in-app local-ADB grants after reviewing the scope. This observer requests no screen-content or key capability. Exact home events show the panel; other window events hide it. Native emulator transitions pass; BYD event coverage remains pending owner validation. See README for setup and docs/VALIDATION.md for measured checks.
+
+## 0.1.11 field iteration
+
+The owner confirmed the 30-second overlay rendered, but it also stayed over the global menu. That preview bypassed the home observer. The bypass service is removed. The persistent panel now uses exact resolved-home window identity plus reported gearMode P, and listens to gear-setting notifications. It hides on another window or screen off and has no timeout. This is display eligibility, not verified telemetry freshness or movement permission. Panel taps open the selected saved-position test. Real menu/camera/CarPlay window callbacks need another field check.

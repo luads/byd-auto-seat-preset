@@ -17,7 +17,6 @@
     <activity android:name=".SeatMovementTrialActivity" android:exported="false" />
     <activity android:name=".SeatCaptureActivity" android:exported="false" />
     <activity android:name=".ChildTrialActivity" android:exported="false" />
-    <provider android:name=".BackupProvider" android:authorities="${applicationId}.backups" android:exported="false" android:grantUriPermissions="true" />
     <activity android:name=".ChildReplayActivity" android:exported="false" />
     <activity android:name=".MotionPreviewActivity" android:exported="false" />
     <activity android:name=".MainActivity" android:exported="true">
@@ -27,7 +26,6 @@
       <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
       <meta-data android:name="android.accessibilityservice" android:resource="@xml/home_visibility" />
     </service>
-    <service android:name=".FloatingPanelService" android:exported="false" />
     <receiver android:name=".PresetWidget" android:exported="false">
       <intent-filter><action android:name="android.appwidget.action.APPWIDGET_UPDATE" /></intent-filter>
       <meta-data android:name="android.appwidget.provider" android:resource="@xml/preset_widget" />

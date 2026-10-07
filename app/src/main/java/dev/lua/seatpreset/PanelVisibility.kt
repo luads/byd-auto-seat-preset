@@ -1,6 +1,9 @@
 package dev.lua.seatpreset
 
 object PanelVisibility {
+  // Visibility only: does not promote a cached setting to fresh movement evidence.
+  fun reportedPark(home: Boolean, enabled: Boolean, interactive: Boolean, gearMode: Int?) =
+    home && enabled && interactive && gearMode == 1
   fun allowed(home: Boolean, enabled: Boolean, snapshot: VehicleSnapshot, now: Long, parkOnly: Boolean = true): Boolean {
     if (!home || !enabled) return false
     if (!parkOnly) return true

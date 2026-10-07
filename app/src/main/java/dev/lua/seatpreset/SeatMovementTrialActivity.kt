@@ -18,13 +18,13 @@ class SeatMovementTrialActivity : Activity() {
   private lateinit var axis: Spinner
   override fun onCreate(state: Bundle?) {
     super.onCreate(state)
-    if (!StorageAccess.unlocked(this) || !PresetStore(this).developerMode || BuildConfig.DEMO) { finish(); return }
+    if (!StorageAccess.unlocked(this) || BuildConfig.DEMO) { finish(); return }
     bridge=OemReadBridge(this)
     val page=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(32,24,32,24);setBackgroundColor(getColor(R.color.matte_canvas)) }
     fun label(value:String,size:Float)=TextView(this).apply { text=value;textSize=size;setTextColor(getColor(R.color.matte_silver));setPadding(0,12,0,12) }
     fun button(value:String,click:()->Unit)=Button(this).apply { text=value;isAllCaps=false;setOnClickListener { runCatching(click).onFailure { output.text=it.message?:"Test unavailable" } } }
-    page.addView(label("Supervised seat movement trial",28f))
-    page.addView(label("Owner-operated car only. First use native controls to select A, then change ONLY one driver-seat axis by a small amount to B, then return to A. Record each position below. Confirm the readings track that axis and the native controls interrupt movement. This test sends ONE percentage command to driver area 1. It does not move mirrors or enable normal recall.",18f))
+    page.addView(label("Test saved position",28f))
+    page.addView(label("Owner-operated car only. Choose an axis. 1: Record your current position (A). 2: Use native controls to move only that axis to the saved position (B), then record. 3: Return to A and record. You can then test the same movement with the app. Confirm the readings track that axis and the native controls interrupt movement. This test sends ONE percentage command to driver area 1. It does not move mirrors or enable normal recall.",18f))
     axis=Spinner(this).apply { adapter=ArrayAdapter(this@SeatMovementTrialActivity,android.R.layout.simple_spinner_dropdown_item,SeatObservation.axes.toList());onItemSelectedListener=object:AdapterView.OnItemSelectedListener {
       override fun onItemSelected(parent:AdapterView<*>?,view:android.view.View?,position:Int,id:Long) { trial.reset() }
       override fun onNothingSelected(parent:AdapterView<*>?) {}
@@ -32,9 +32,9 @@ class SeatMovementTrialActivity : Activity() {
     output=label("Record A → B → A using the native seat controls. No app command is sent during these reads.",22f);page.addView(output)
     page.addView(button("Record next native position · A / B / A") { val selected=axis.selectedItem.toString();task {
       val p=bridge.seat();val at=SystemClock.elapsedRealtime()
-      runOnUiThread { if(foreground) { trial.record(p,at);output.text=p.coordinates.toString()+"\nAxis verified in this session: ${trial.validated(selected)}" } }
+      runOnUiThread { if(foreground) { trial.record(p,at);output.text=p.coordinates.toString()+"\n${if (trial.validated(selected)) "Ready. Tap Move saved axis." else "Recorded. Next: ${trial.nextStep()}"}" } }
     } })
-    page.addView(button("Test one axis from saved preset…") { confirmPhysical() })
+    page.addView(button("Move saved axis…") { confirmPhysical() })
     page.addView(button("Back · discard test") { finish() })
     setContentView(ScrollView(this).apply { addView(page) })
   }
@@ -45,45 +45,42 @@ class SeatMovementTrialActivity : Activity() {
   private fun confirmPhysical() {
     check(!busy.get()) { "Wait for the current read" }
     val selected=axis.selectedItem.toString()
-    check(trial.validated(selected)) { "Record a matching native A → B → A for this axis first" }
-    AlertDialog.Builder(this).setTitle("Confirm the physical test")
-      .setMessage("Are you in the driver's seat, in P, parking brake applied, with clear space? Have you verified that native seat controls interrupt movement and that the readings track this driver's axis? You must remain at the controls. Cancel if any condition is uncertain.")
-      .setNegativeButton("Cancel",null).setPositiveButton("Confirmed") { _,_->
-        val all=runCatching { PresetStore(this).all() }.getOrElse { output.text="Preset storage unavailable";return@setPositiveButton }.filter { it.position?.coordinateFormat==SeatObservation.FORMAT }
-        AlertDialog.Builder(this).setTitle("Select the saved test position").setItems(all.map { it.name }.toTypedArray()) { _,i ->
-          task {
-            val target=all[i].position!!;val current=bridge.seat()
-            val writer=bridge.bindAxisWriter(selected)
-            check(bridge.parkedVetoClear()) { "OEM P/brake readings are unavailable or do not match" }
-            // Validate the small delta before presenting the final button.
-            trial.prepare(selected,current,target,SystemClock.elapsedRealtime())
-            runOnUiThread { if(foreground) {
-              AlertDialog.Builder(this).setTitle("Move the driver's $selected axis now?")
-                .setMessage("${current.coordinates.getValue(selected)} → ${target.coordinates.getValue(selected)}. Only this axis, driver area 1. Press native seat controls if movement is wrong. The app cannot guarantee cancellation. Reconfirm P and parking brake at the moment you press Move. This is a supervised experiment, not validated recall.")
-                .setNegativeButton("Cancel",null).setPositiveButton("Move now") { _,_->
-                  val confirmed=SystemClock.elapsedRealtime()
-                  task {
-                    val fresh=bridge.seat()
-                    check(bridge.parkedVetoClear()) { "OEM P/brake veto failed" }
-                    trial.prepare(selected,fresh,target,confirmed)
-                    // Fresh physical evidence is the owner's final confirmation, not the OEM cache.
-                    val physical=VehicleSnapshot(Gear.P,true,null,confirmed)
-                    val command=trial.consume(SystemClock.elapsedRealtime(),physical,foreground)
-                    check(foreground && SystemClock.elapsedRealtime()-confirmed <= RecallPolicy.MAX_AGE_MS) { "Test expired before command" }
-                    PrivateDiagnostics.record(this,"supervised axis command START axis=${command.axis} target=${command.target}")
-                    // Do not hold the trial lock across an OEM binder call or block lifecycle cancellation.
-                    check(foreground && SystemClock.elapsedRealtime()-confirmed <= RecallPolicy.MAX_AGE_MS && bridge.parkedVetoClear()) { "Conditions changed before command" }
-                    check(foreground && SystemClock.elapsedRealtime()-confirmed <= RecallPolicy.MAX_AGE_MS) { "Confirmation expired" }
-                    writer(command.target)
-                    PrivateDiagnostics.record(this,"supervised axis command RETURNED axis=${command.axis}; completion unverified")
-                    val after=bridge.seat()
-                    runOnUiThread { if(foreground) output.text="One $selected command sent. Getter readback: ${after.coordinates.getValue(selected)}. Confirm actual movement yourself. Completion is not proven. No more commands are queued." }
-                  }
-                }.show()
-            } }
-          }
-        }.setNegativeButton("Cancel",null).show()
-      }.show()
+    check(trial.validated(selected)) { "Record A, B and A for this axis first" }
+    val presets=PresetStore(this).all().filter { it.position?.coordinateFormat==SeatObservation.FORMAT }
+    val selectedId=intent.getStringExtra("preset-id")
+    val candidates=presets.filter { selectedId==null || it.id==selectedId }
+    check(candidates.isNotEmpty()) { "Hold the preset card to save a position first" }
+    if(candidates.size==1) prepare(candidates.first(),selected)
+    else AlertDialog.Builder(this).setTitle("Saved position").setItems(candidates.map { it.name }.toTypedArray()) { _,i -> prepare(candidates[i],selected) }.setNegativeButton("Cancel",null).show()
+  }
+  private fun prepare(preset: Preset, selected: String) {
+    task {
+      val target=checkNotNull(preset.position);val current=bridge.seat()
+      val writer=bridge.bindAxisWriter(selected)
+      check(bridge.parkedVetoClear()) { "Select P and apply the parking brake" }
+      trial.prepare(selected,current,target,SystemClock.elapsedRealtime())
+      runOnUiThread { if(foreground) {
+        AlertDialog.Builder(this).setTitle("Move ${preset.name}'s $selected axis?")
+          .setMessage("${current.coordinates.getValue(selected)} → ${target.coordinates.getValue(selected)}. Driver seat only. Confirm you are in P, parking brake applied and space is clear. Stay at the native controls and use them if movement is wrong. Only this verified axis moves; the app cannot guarantee cancellation.")
+          .setNegativeButton("Cancel",null).setPositiveButton("Move now") { _,_->
+            val confirmed=SystemClock.elapsedRealtime()
+            task {
+              val observed=bridge.seat()
+              check(bridge.parkedVetoClear()) { "P/brake check failed" }
+              trial.prepare(selected,observed,target,confirmed)
+              val physical=VehicleSnapshot(Gear.P,true,null,confirmed)
+              val command=trial.consume(SystemClock.elapsedRealtime(),physical,foreground)
+              PrivateDiagnostics.record(this,"supervised axis command START axis=${command.axis} target=${command.target}")
+              check(foreground && bridge.parkedVetoClear()) { "Conditions changed" }
+              check(foreground && SystemClock.elapsedRealtime()-confirmed <= RecallPolicy.MAX_AGE_MS) { "Confirmation expired" }
+              writer(command.target)
+              PrivateDiagnostics.record(this,"supervised axis command RETURNED axis=${command.axis}; completion unverified")
+              val after=bridge.seat()
+              runOnUiThread { if(foreground) output.text="Command sent. $selected readback: ${after.coordinates.getValue(selected)}. Check actual movement. No further command is queued." }
+            }
+          }.show()
+      } }
+    }
   }
   override fun onResume() { super.onResume();foreground=true }
   override fun onStop() { foreground=false;synchronized(trial) { trial.reset() };super.onStop() }

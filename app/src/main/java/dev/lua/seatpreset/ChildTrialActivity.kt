@@ -52,6 +52,7 @@ class ChildTrialActivity : Activity() {
       if (!inFlight.compareAndSet(false, true)) return@Runnable
       worker.execute {
         val pair = runCatching { bridge.children() }.getOrElse { null to null }
+        val parked = runCatching { bridge.rawPark().first == 1 }.getOrDefault(false)
         val now = SystemClock.elapsedRealtime()
         inFlight.set(false)
         main.post {
@@ -62,10 +63,14 @@ class ChildTrialActivity : Activity() {
           val sample = ChildSample(now, pair.first, pair.second)
           if (pair.first != null && pair.second != null) valid++ else failures++
           trialSummary = "samples=$count valid=$valid unavailable=$failures last=$pair maxGap=$maxGap"
-          val side = recognizer.sample(sample)
+          val side = if (parked) recognizer.sample(sample) else { recognizer.reset(); null }
           PrivateDiagnostics.record(this, "child sample at=$now left=${pair.first} right=${pair.second} gesture=$side")
-          if (side != null) { events++; output.text = "$side double detected · event $events · SCREEN ONLY" }
-          else if (events == 0) output.text = if (pair.first != null && pair.second != null) "READY · left ${pair.first}, right ${pair.second}" else "Not ready: both child-lock states must be readable"
+          if (side != null) {
+            events++
+            val mapped = runCatching { ChildBindings(this).preset(side) }.getOrNull()
+            output.text = "${mapped?.name ?: "No preset assigned"} · $side double · event $events\nP reported. Screen feedback only; no seat command."
+          }
+          else if (events == 0) output.text = if (!parked) "Select P to test bindings" else if (pair.first != null && pair.second != null) "READY · left ${pair.first}, right ${pair.second}" else "Not ready: both child-lock states must be readable"
           main.postDelayed(tick, 100)
         }
       }

@@ -33,6 +33,8 @@ class MainActivity : Activity() {
   private var release: PublicRelease? = null
   private var updateMessage = "Check for a public release"
   private var updateBusy = false
+  private var captureBusy = false
+  @Volatile private var captureSession = 0
 
   private val unlockedReceiver = object : android.content.BroadcastReceiver() {
     override fun onReceive(context: android.content.Context, intent: Intent) { Startup.retry(context); safeRender() }
@@ -44,14 +46,25 @@ class MainActivity : Activity() {
     settings = savedInstanceState?.getBoolean("settings") ?: false
     demoControls = savedInstanceState?.getBoolean("demoControls") ?: false
     safeRender()
+    handlePanelRequest(intent)
     runCatching { if (StorageAccess.unlocked(this) && store.checkUpdatesOnStart) checkUpdates() }
+  }
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent); setIntent(intent); handlePanelRequest(intent)
+  }
+  private fun handlePanelRequest(request: Intent) {
+    val id=request.getStringExtra("test-preset-id") ?: return
+    request.removeExtra("test-preset-id")
+    runCatching { store.all().firstOrNull { it.id == id }?.let { openMovement(it) } }
+      .onFailure { toast("Saved position is unavailable") }
   }
   override fun onSaveInstanceState(outState: Bundle) {
     outState.putBoolean("settings", settings)
     outState.putBoolean("demoControls", demoControls)
     super.onSaveInstanceState(outState)
   }
-  override fun onResume() { super.onResume(); HomeVisibilityService.instance?.hide(); stopService(Intent(this, FloatingPanelService::class.java)); Startup.retry(this); if (::store.isInitialized) safeRender() }
+  override fun onResume() { super.onResume(); HomeVisibilityService.instance?.hide(); Startup.retry(this); if (::store.isInitialized) safeRender() }
+  override fun onStop() { captureSession++; super.onStop() }
   override fun onDestroy() { runCatching { unregisterReceiver(unlockedReceiver) }; worker.shutdownNow(); super.onDestroy() }
 
   private fun safeRender() { render() }
@@ -82,7 +95,7 @@ class MainActivity : Activity() {
 
   private fun renderPresets() {
     val vehicle = Vehicle.adapter(this)
-    val block = if (BuildConfig.DEMO) RecallPolicy.blockReason(vehicle.snapshot(), android.os.SystemClock.elapsedRealtime()) else "Seat control is not available in this pre-alpha"
+    val block = if (BuildConfig.DEMO) RecallPolicy.blockReason(vehicle.snapshot(), android.os.SystemClock.elapsedRealtime()) else "Hold a card to save your position. Tap to test a saved position."
     page.addView(text(block ?: "P · parking brake confirmed", 16f, if (block == null) getColor(R.color.matte_ready) else getColor(R.color.matte_caution)))
     val wide = resources.configuration.screenWidthDp >= 600
     val favourites = store.favourites()
@@ -94,14 +107,15 @@ class MainActivity : Activity() {
           orientation = LinearLayout.VERTICAL
           background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x335AA8ED), rounded(panelColor, 28), null)
           setPadding(dp(28), dp(24), dp(28), dp(28))
-          if (BuildConfig.DEMO) {
-            isClickable = true; isFocusable = true
-            contentDescription = if (saved) "Use preset for ${preset.name}" else "Save position for ${preset.name}"
-            setOnClickListener {
-              runCatching {
-                if (!saved) capture(preset) else { toast(Vehicle.recall(this@MainActivity, preset).message); render() }
-              }.onFailure { toast(it.message ?: "Action failed") }
-            }
+          isClickable = true; isFocusable = true; isLongClickable = true
+          contentDescription = "${preset.name}. Hold to save current position; tap to use saved position."
+          setOnLongClickListener { capture(preset); true }
+          setOnClickListener {
+            runCatching {
+              if (!saved) toast("Hold this card to save the current position")
+              else if (BuildConfig.DEMO) { toast(Vehicle.recall(this@MainActivity, preset).message); render() }
+              else openMovement(preset)
+            }.onFailure { toast(it.message ?: "Action failed") }
           }
         }
         val heading = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL }
@@ -119,8 +133,8 @@ class MainActivity : Activity() {
           setPadding(0, dp(16), 0, dp(16))
         }, LinearLayout.LayoutParams(-1, dp(if (wide) 240 else 180)))
         val footer = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL; if (!wide) orientation = LinearLayout.VERTICAL }
-        footer.addView(text(if (preset.position?.coordinateFormat == SeatObservation.FORMAT) "Experimental readings saved" else if (saved) "Position saved" else "No position saved", 16f, mutedColor), if (wide) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2))
-        footer.addView(text(if (!BuildConfig.DEMO) "Unavailable" else if (saved) "Use preset  →" else "Save position  +", 18f, if (BuildConfig.DEMO) accentColor else mutedColor))
+        footer.addView(text(if (saved) "Position saved" else "No position saved", 16f, mutedColor), if (wide) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2))
+        footer.addView(text(if (saved) { if (BuildConfig.DEMO) "Use preset  →" else "Test position  →" } else "Hold to save", 18f, accentColor))
         card.addView(footer)
         val params = if (wide) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2)
         params.setMargins(dp(6), dp(24), dp(6), dp(16))
@@ -216,12 +230,6 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(if (resources.configuration.screenWidthDp < 700) 0 else 8); bottomMargin = dp(8) })
         page.addView(controls)
       }
-      page.addView(text("Preset backup", 22f))
-      page.addView(text("Save your names, positions and favourites to a file. Import replaces the saved presets after confirmation.", 15f, mutedColor))
-      val backups = row().apply { if (resources.configuration.screenWidthDp < 600) orientation = LinearLayout.VERTICAL }
-      backups.addView(action("Export presets") { exportPresets() }, LinearLayout.LayoutParams(if (resources.configuration.screenWidthDp < 600) -1 else -2, -2).apply { marginEnd = dp(8); bottomMargin = dp(8) })
-      backups.addView(action("Import presets") { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE), 42) })
-      page.addView(backups)
       store.storageMessage()?.let { message ->
         page.addView(text(message, 15f, getColor(R.color.matte_caution)))
         if (message.startsWith("Recovered")) page.addView(action("Confirm recovered presets") {
@@ -232,24 +240,19 @@ class MainActivity : Activity() {
     }
     group("Home panel") {
       val panelSettings = HomePanelSettings(this)
-      page.addView(text("Two favourites, one tap. Shown on home while the car is in P. Drag the header to move it.", 16f, mutedColor))
-      if (!BuildConfig.DEMO) page.addView(text("Automatic P-only display is unavailable in this build. Test panel below shows a display-only preview for 30 seconds, without gear data or seat movement.", 15f, getColor(R.color.matte_caution)))
-      page.addView(text("Overlay access: ${if (Settings.canDrawOverlays(this)) "ready" else "needs setup"} · Home detection: ${if (HomeVisibilityService.instance != null) "connected" else if (panelSettings.observerEnabled()) "waiting for Android" else "needs setup"}", 15f, mutedColor))
-      page.addView(action("Test panel · 30 seconds") {
-        if (!Settings.canDrawOverlays(this)) toast("Set up home panel access first")
-        else { startService(Intent(this, FloatingPanelService::class.java).setAction(FloatingPanelService.ACTION_SHOW)); startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)); }
-      })
+      page.addView(text("Only on home while P is reported. Drag to move.", 16f, mutedColor))
+      if (!Settings.canDrawOverlays(this) || !panelSettings.observerEnabled()) page.addView(text("Home access needs setup.", 15f, mutedColor))
       page.addView(action("Set up home panel") {
         AlertDialog.Builder(this).setTitle("Enable home panel access?")
-          .setMessage("Allow this app to display on home, detect when home is visible, and prepare its startup connection. Uses this device's authorized setup connection. Android may ask to Allow debugging once. The observer does not read screen content or press buttons.")
+          .setMessage("Allow the panel to appear on home. Approve the Android debugging prompt if shown. No seat movement.")
           .setNegativeButton("Cancel", null).setPositiveButton("Set up") { _, _ -> setupPanel(true) }.show()
       }.apply { isEnabled = !panelSetupBusy })
       if (panelSetupMessage.isNotBlank()) page.addView(text(panelSetupMessage, 15f, mutedColor))
       page.addView(Switch(this).apply {
-        text = if (BuildConfig.DEMO) "Show favourites on home" else "Enable home panel when P data is ready"; setTextColor(textColor); minHeight = dp(52); isChecked = panelSettings.enabled
+        text = "Show panel on home in P"; setTextColor(textColor); minHeight = dp(52); isChecked = panelSettings.enabled
         setOnCheckedChangeListener { _, on ->
           if (on && (!Settings.canDrawOverlays(this@MainActivity) || !panelSettings.observerEnabled())) { toast("Set up home panel first"); isChecked = false }
-          else { panelSettings.enabled = on; HomeVisibilityService.instance?.hide() }
+          else runCatching { panelSettings.enabled = on; HomeVisibilityService.instance?.refreshVehicle() }.onFailure { toast("Could not save panel choice"); render() }
         }
       })
       val sizeLabel = text("Panel size: ${PanelPlacement.width(this)}", 16f, mutedColor); page.addView(sizeLabel)
@@ -266,12 +269,25 @@ class MainActivity : Activity() {
         LinearLayout.LayoutParams(dp(previewWidth), dp(previewWidth / 2)).apply { topMargin = dp(8); bottomMargin = dp(16) })
       val placement = row().apply { if (resources.configuration.screenWidthDp < 600) orientation = LinearLayout.VERTICAL }
       placement.addView(action("Reset placement") { PanelPlacement.reset(this); render() }, LinearLayout.LayoutParams(if (resources.configuration.screenWidthDp < 600) -1 else -2, -2).apply { bottomMargin = dp(8) })
-      placement.addView(action("Turn off home panel") { setupPanel(false) }, LinearLayout.LayoutParams(-2, -2).apply { marginStart = dp(if (resources.configuration.screenWidthDp < 600) 0 else 8) })
       page.addView(placement)
     }
     root.addView(columns)
     columns = LinearLayout(this).apply { orientation = if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL }
-    group("Start with the car") {
+    group("Child-lock shortcuts") {
+      ChildSide.values().forEach { side ->
+        val bindings = ChildBindings(this)
+        page.addView(action("${if (side == ChildSide.LEFT) "Left" else "Right"} double tap: ${bindings.preset(side)?.name ?: "Off"}") {
+          val all = store.all()
+          AlertDialog.Builder(this).setTitle("${side.name.lowercase().replaceFirstChar { it.uppercase() }} double tap")
+            .setItems((listOf("Off") + all.map { it.name }).toTypedArray()) { _, i -> runCatching { bindings.assign(side, if (i == 0) null else all[i-1]); render() }.onFailure { toast("Could not save shortcut") } }.show()
+        })
+      }
+      page.addView(text("Test in P. Feedback only until seat control is verified.", 15f, mutedColor))
+      page.addView(action("Test shortcuts") { startActivity(Intent(this, ChildTrialActivity::class.java)) })
+    }
+    root.addView(columns)
+    columns = LinearLayout(this).apply { orientation = if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL }
+    group("Startup") {
     page.addView(action("Open car startup settings") {
       runCatching { startActivity(Intent().setComponent(ComponentName("com.byd.appstartmanagement", "com.byd.appstartmanagement.StartupAppManageActivity"))) }
         .onFailure { toast("Car startup settings are not available on this device") }
@@ -284,16 +300,15 @@ class MainActivity : Activity() {
         else { runCatching { Startup.setEnabled(this@MainActivity, on) }.onFailure { toast("Could not save startup choice") }; render() }
       }
     })
-    page.addView(text("Uses the access approved during setup. Off unless you enable it.", 15f, mutedColor))
     }
     group("Updates") {
     page.addView(text("${BuildConfig.VERSION_NAME} · ${BuildConfig.FLAVOR}", 16f, mutedColor))
     page.addView(Switch(this).apply {
-      text = "Check updates when the app opens"; setTextColor(textColor); minHeight = dp(52); isChecked = store.checkUpdatesOnStart
+      text = "Check on start"; setTextColor(textColor); minHeight = dp(52); isChecked = store.checkUpdatesOnStart
       setOnCheckedChangeListener { _, on -> store.checkUpdatesOnStart = on }
     })
     page.addView(Switch(this).apply {
-      text = "Install updates automatically"; setTextColor(textColor); minHeight = dp(52)
+      text = "Automatic updates"; setTextColor(textColor); minHeight = dp(52)
       isChecked = SilentUpdater.enabled(this@MainActivity)
       setOnCheckedChangeListener { _, on ->
         if (!on) { runCatching { SilentUpdater.setEnabled(this@MainActivity, false) }.onFailure { toast("Could not save update choice") }; render() }
@@ -323,25 +338,7 @@ class MainActivity : Activity() {
   }
 
   private var exportContents: String? = null
-  private fun exportPresets() {
-    AlertDialog.Builder(this).setTitle("Export presets · personal data")
-      .setItems(arrayOf("Save to a file", "Share backup…")) { _, choice ->
-        runCatching { if (choice == 0) saveBackupFile() else shareBackup() }
-          .onFailure { WidgetDiagnostics.record(this, "backup export failed type=${it.javaClass.simpleName}"); toast("File export is unavailable. Try Export presets → Share backup.") }
-      }.setNegativeButton("Cancel", null).show()
-  }
-  private fun shareBackup() {
-    val raw = store.exportDocument()
-    val directory = java.io.File(cacheDir, "backups").apply { check(isDirectory || mkdirs()) }
-    directory.listFiles()?.filter { it.name.startsWith("backup-") }?.sortedByDescending { it.lastModified() }?.drop(3)?.forEach { it.delete() }
-    val file = java.io.File(directory, "backup-${UUID.randomUUID()}.json")
-    java.io.FileOutputStream(file).use { it.write(raw.toByteArray(Charsets.UTF_8)); it.fd.sync() }
-    check(file.readText() == raw) { "Backup write failed" }
-    val uri = Uri.parse("content://$packageName.backups/${file.name}")
-    val send = Intent(Intent.ACTION_SEND).setType("application/json").putExtra(Intent.EXTRA_STREAM, uri)
-      .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION).apply { clipData = android.content.ClipData.newRawUri("Preset backup", uri) }
-    startActivity(Intent.createChooser(send, "Save or share preset backup"))
-  }
+  private fun exportPresets() { runCatching { saveBackupFile() }.onFailure { toast("File export is unavailable on this device") } }
   private fun saveBackupFile() {
     exportContents = store.exportDocument()
     startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE, "seat-presets.json"), 41)
@@ -366,10 +363,12 @@ class MainActivity : Activity() {
           .setMessage("Import ${doc.presets.size} presets, including ${doc.favourites.joinToString(" and ") { id -> doc.presets.first { it.id == id }.name }} as favourites? Names and positions will replace this app's saved presets. No seat movement.")
           .setNegativeButton("Cancel", null).setPositiveButton("Import") { _, _ -> runCatching { store.importDocument(raw); changed(); toast("Presets imported") }.onFailure { toast("Import failed. Existing presets were kept.") } }.show()
       }
-    }.onFailure { WidgetDiagnostics.record(this, "backup result failed request=$requestCode type=${it.javaClass.simpleName}"); toast("Backup failed. Your saved presets were kept. Try Share backup if file export fails.") }
+    }.onFailure { WidgetDiagnostics.record(this, "backup result failed request=$requestCode type=${it.javaClass.simpleName}"); toast("Backup failed. Saved presets were kept.") }
   }
 
   private fun renderDeveloperSettings() {
+    page.addView(action("Export to file") { exportPresets() })
+    page.addView(action("Import from file") { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE), 42) })
     if (!BuildConfig.DEMO) page.addView(action("Supervised seat movement trial") { startActivity(Intent(this, SeatMovementTrialActivity::class.java)) })
     page.addView(action("Child-lock input trial · screen only") { startActivity(Intent(this, ChildTrialActivity::class.java)) })
     page.addView(text("Developer tools", 22f, accentColor))
@@ -399,7 +398,7 @@ class MainActivity : Activity() {
         toast("Permission command copied")
       })
     }
-    page.addView(action(if (Settings.canDrawOverlays(this)) "Try floating panel · 30 seconds" else if (permissionIntent.resolveActivity(packageManager) == null) "Check overlay permission" else "Allow floating panel") {
+    page.addView(action(if (Settings.canDrawOverlays(this)) "Open home panel" else if (permissionIntent.resolveActivity(packageManager) == null) "Check overlay permission" else "Allow floating panel") {
       if (!Settings.canDrawOverlays(this)) {
         if (permissionIntent.resolveActivity(packageManager) == null) {
           toast("Run the permission command, then reopen this app")
@@ -407,13 +406,13 @@ class MainActivity : Activity() {
         } else runCatching { startActivity(permissionIntent) }
           .onFailure { toast("Overlay permission screen is unavailable") }
       } else if (panelSettings.enabled) {
-        toast("Switch off Show panel on home before using the manual placement test")
+        toast("Return to home in P to see the panel")
       } else {
         val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (home.resolveActivity(packageManager) == null) toast("Home screen is unavailable")
         else {
-          startService(Intent(this, FloatingPanelService::class.java).setAction(FloatingPanelService.ACTION_SHOW))
-          runCatching { startActivity(home) }.onFailure { stopService(Intent(this, FloatingPanelService::class.java)); toast("Could not open home") }
+          HomePanelSettings(this).enabled = true
+          runCatching { startActivity(home) }.onFailure { toast("Could not open home") }
         }
       }
     })
@@ -453,7 +452,12 @@ class MainActivity : Activity() {
     page.addView(action("Re-enable ADB settings now") { toast(Startup.reopen(this)); render() })
   }
 
+  private fun openMovement(preset: Preset) {
+    if (preset.position == null) { toast("Hold the card to save a position first"); return }
+    startActivity(Intent(this, SeatMovementTrialActivity::class.java).putExtra("preset-id", preset.id))
+  }
   private fun capture(preset: Preset) {
+    if (!BuildConfig.DEMO) { captureLive(preset); return }
     val vehicle = Vehicle.adapter(this)
     if (vehicle.capture() == null) return toast("Seat capture is not available yet")
     RecallPolicy.blockReason(vehicle.snapshot(), android.os.SystemClock.elapsedRealtime())?.let { return toast(it) }
@@ -468,10 +472,36 @@ class MainActivity : Activity() {
         }.onFailure { toast(it.message ?: "Could not save position") }
       }.show()
   }
+  private fun captureLive(preset: Preset) {
+    if (captureBusy) return
+    AlertDialog.Builder(this).setTitle("Save current position for ${preset.name}?")
+      .setMessage(if (preset.position == null) "Park in P. This saves the current driver's seat position." else "Park in P. Replace the saved position with the current one?")
+      .setNegativeButton("Cancel", null).setPositiveButton("Save") { _, _ ->
+        captureBusy = true; val session = captureSession
+        toast("Saving position…")
+        worker.execute {
+          val result = runCatching {
+            val bridge = OemReadBridge(this)
+            check(bridge.rawPark().first == 1) { "Select P before saving" }
+            val a = bridge.seat(); Thread.sleep(200); val b = bridge.seat()
+            check(SeatObservation.repeatable(a, b)) { "Seat is moving. Try again when stopped." }
+            check(bridge.rawPark().first == 1 && session == captureSession) { "Save cancelled" }
+            // Only persist an observation. No inferred freshness, identity or vehicle command.
+            store.save(store.all().map { if (it.id == preset.id) it.copy(position = b, capturedAtMs = System.currentTimeMillis()) else it })
+          }
+          runOnUiThread {
+            captureBusy = false
+            if (!isDestroyed && session == captureSession) {
+              result.fold({ toast("Position saved for ${preset.name}"); changed() }, { toast(it.message ?: "Could not read the seat position") })
+            }
+          }
+        }
+      }.show()
+  }
   private fun editPreset(preset: Preset) {
     AlertDialog.Builder(this).setTitle(preset.name).setItems(arrayOf("Save current position…", "Rename", "Use as favourite 1", "Use as favourite 2")) { _, choice ->
       when (choice) {
-        0 -> if (BuildConfig.DEMO) capture(preset) else startActivity(Intent(this, SeatCaptureActivity::class.java).putExtra("preset-id", preset.id))
+        0 -> capture(preset)
         1 -> nameDialog("Rename preset", preset.name) { name -> store.save(store.all().map { if (it.id == preset.id) it.copy(name = name) else it }); changed() }
         else -> { runCatching { store.setFavourite(choice - 2, preset); changed() }.onFailure { toast(it.message ?: "Could not save favourite") } }
       }

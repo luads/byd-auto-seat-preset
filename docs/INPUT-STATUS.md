@@ -9,3 +9,7 @@ Implemented: an in-memory exclusive-side recognizer for start → other → star
 NFC unlock identity has no conclusion. Tests remain pending. Do not display a detected driver or connect either input to live recall yet.
 
 Source: /Users/luadesouza/Sites/byd-adb-lab/REPORT-child-lock-agent-handoff.md. Raw vehicle evidence stays private in the lab.
+
+## 0.1.11 mapping UI
+
+The owner reported usable child-lock mapping in the foreground trial. Settings now assigns left/right doubles to preset IDs, default Off. The short foreground test displays the mapped name only while gearMode reports P. Missing/invalid data resets the recognizer. No initial sample or return to P dispatches an action. Continuous recognition and automatic movement are not enabled by saving a mapping.

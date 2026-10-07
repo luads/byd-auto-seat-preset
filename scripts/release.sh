@@ -36,4 +36,4 @@ for FLAVOR in demo live; do
   cp "$SRC" "$OUT/byd-auto-seat-preset-$FLAVOR-$VN-$VC.apk"
 done
 gh release create "v$VN" "$OUT"/*.apk --repo "$REPO" --target "$HEAD_SHA" --title "v$VN · pre-alpha" --prerelease \
-  --notes-file "${SEAT_RELEASE_NOTES:-docs/RELEASE-0.1.10.md}"
+  --notes-file "${SEAT_RELEASE_NOTES:-docs/RELEASE-$VN.md}"
