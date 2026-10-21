@@ -59,6 +59,6 @@ internal object PrivateDiagnostics {
   fun report(context: Context): String {
     StorageAccess.requireUnlocked(context); log.flush(context)
     val file = File(context.filesDir, "private-observations.log")
-    return if (file.exists()) file.readText().takeLast(12_000) else "No private trials recorded"
+    return if (file.exists()) file.readText().takeLast(128_000) else "No private trials recorded"
   }
 }

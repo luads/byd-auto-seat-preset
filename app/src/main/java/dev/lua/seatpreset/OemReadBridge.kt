@@ -17,6 +17,7 @@ internal class OemReadBridge(private val context: Context) {
       "setting" -> "android.hardware.bydauto.setting.BYDAutoSettingDevice"
       "doorlock" -> "android.hardware.bydauto.doorlock.BYDAutoDoorLockDevice"
       "gearbox" -> "android.hardware.bydauto.gearbox.BYDAutoGearboxDevice"
+      "bodywork" -> "android.hardware.bydauto.bodywork.BYDAutoBodyworkDevice"
       else -> error("Unsupported device")
     }
     val cls = Class.forName(name, false, loader)
@@ -25,10 +26,10 @@ internal class OemReadBridge(private val context: Context) {
   }
   private fun number(kind: String, name: String, area: Int? = null): Double = GetterReadiness.read {
     StorageAccess.requireUnlocked(context)
-    require(name in setOf("getSeatHorization", "getSeatbackrestPostion", "getSeatTurnHeight", "getDoorLockStatus", "getEPBState"))
+    require(name in setOf("getSeatHorization", "getSeatbackrestPostion", "getSeatTurnHeight", "getDoorLockStatus", "getEPBState") || (kind=="bodywork" && name in absoluteGetters))
     val obj = device(kind)
     val method = if (area == null) obj.javaClass.getMethod(name) else obj.javaClass.getMethod(name, Int::class.javaPrimitiveType)
-    val expected = if (name in setOf("getSeatbackrestPostion", "getSeatTurnHeight")) Float::class.javaPrimitiveType else Int::class.javaPrimitiveType
+    val expected = if (name in setOf("getSeatbackrestPostion", "getSeatTurnHeight") || name in absoluteGetters) Float::class.javaPrimitiveType else Int::class.javaPrimitiveType
     check(method.returnType == expected) { "Getter signature changed" }
     val value = if (area == null) method.invoke(obj) else method.invoke(obj, area)
     (value as? Number)?.toDouble()?.takeIf { it.isFinite() } ?: error("Getter is unavailable")
@@ -50,6 +51,18 @@ internal class OemReadBridge(private val context: Context) {
     Startup.times.sampled(android.os.SystemClock.elapsedRealtime())
     return Position(values, "byd-setting-driver-1:" + java.security.MessageDigest.getInstance("SHA-256").digest((android.os.Build.FINGERPRINT + ":" + context.packageManager.getPackageInfo("com.byd.data.collect", 0).longVersionCode).toByteArray()).joinToString("") { "%02x".format(it) }.take(32), SeatObservation.FORMAT)
   }
+  /** Separate raw geometry candidates. Never saved as percentage presets or passed to a writer. */
+  fun absoluteSeatCandidates(): Map<String, Double?> {
+    listOf("BODYWORK_COMMON","BODYWORK_GET").forEach { suffix ->
+      check(context.checkSelfPermission("android.permission.BYDAUTO_$suffix")==android.content.pm.PackageManager.PERMISSION_GRANTED) { "Missing $suffix read permission" }
+    }
+    return absoluteGetters.associateWith { method ->
+      runCatching { number("bodywork",method) }
+        .onFailure { SeatDiagnostics.event(context,"absolute-read","getter=$method cause="+SeatDiagnostics.failure(it)) }.getOrNull()
+    }
+  }
+  private val absoluteGetters=setOf("getDriverSeatHorizontalPosition","getDriverSeatBackrestPosition","getDriverSeatHeightPosition",
+    "getDriverSeatSitpointPosition","getDriverSeatLegholderPosition","getDriverSeatHeadrestHorizontalPosition","getDriverSeatHeadrestVerticalPosition")
   fun children(): Pair<Int?, Int?> {
     fun read(area: Int) = runCatching { number("doorlock", "getDoorLockStatus", area).toInt().takeIf { it in 1..2 } }.getOrNull()
     return read(6) to read(7)
@@ -60,7 +73,8 @@ internal class OemReadBridge(private val context: Context) {
     val gear = runCatching {
       GearModeRead.fromJson(android.provider.Settings.Global.getString(context.contentResolver, GearModeRead.SETTING))
     }.getOrNull()
-    val brake = runCatching { number("gearbox", "getEPBState").toInt() }.getOrNull()
+    val brake = runCatching { number("gearbox", "getEPBState").toInt() }
+      .onFailure { SeatDiagnostics.event(context,"park-read","EPB unavailable cause="+SeatDiagnostics.failure(it)) }.getOrNull()
     return gear to brake
   }
   fun parkedVetoClear(): Boolean {
@@ -69,6 +83,7 @@ internal class OemReadBridge(private val context: Context) {
     return GearModeRead.parked(raw.first, raw.second)
   }
   fun bindAxisWriter(axis: String): (Int) -> Unit {
+    check(SeatWritePolicy.allowed()) { SeatWritePolicy.BLOCK_REASON }
     val methodName = when (axis) {
       "horizontal" -> "turnSeatHorizationPercent"
       "backrest" -> "turnSeatbackrestPercent"
@@ -82,7 +97,8 @@ internal class OemReadBridge(private val context: Context) {
     return { value ->
       StorageAccess.requireUnlocked(context)
       require(value in 1..99)
-      // Invoked only by the explicit supervised test, never by Vehicle.adapter or an input event.
+      // Defense in depth, including callers that bypass the shared recall controller.
+      check(SeatWritePolicy.allowed()) { SeatWritePolicy.BLOCK_REASON }
       method.invoke(obj, 1, value)
     }
   }

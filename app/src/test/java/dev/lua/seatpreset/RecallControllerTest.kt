@@ -13,9 +13,13 @@ class RecallControllerTest {
     var state = VehicleSnapshot(Gear.P, true, null, 1_000)
     var writes = 0
     var verified = true
+    override var resultMessage: String? = null
+    var failure: Exception? = null
+    var reported: Exception? = null
+    override fun failed(error: Exception) { reported=error }
     override fun snapshot() = state
     override fun capture(): Position? = null
-    override fun apply(position: Position): Boolean { writes++; return verified }
+    override fun apply(position: Position): Boolean { failure?.let { throw it };writes++; return verified }
   }
   @Test fun freshParkedRequestDispatchesOnce() {
     val vehicle = FakeVehicle()
@@ -74,4 +78,16 @@ class RecallControllerTest {
     assertFalse(RecallController(vehicle) { 1_500 }.recall(preset).allowed)
     assertEquals(1, vehicle.writes)
   }
+  @Test fun aPausedAdapterReportsTheReasonWithoutSuccess() {
+    val vehicle=FakeVehicle().apply { verified=false;resultMessage=SeatWritePolicy.BLOCK_REASON }
+    val result=RecallController(vehicle) { 1_500 }.recall(preset)
+    assertFalse(result.allowed);assertEquals(SeatWritePolicy.BLOCK_REASON,result.message)
+  }
+  @Test fun failedDispatchRetainsTheExceptionForPrivateDiagnostics() {
+    val cause=SecurityException("fixture denial")
+    val vehicle=FakeVehicle().apply { failure=cause }
+    assertFalse(RecallController(vehicle) { 1_500 }.recall(preset).allowed)
+    assertSame(cause,vehicle.reported);assertEquals(0,vehicle.writes)
+  }
+
 }

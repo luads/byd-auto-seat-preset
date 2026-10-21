@@ -116,7 +116,7 @@ class HomeVisibilityService : AccessibilityService() {
       val preset = PresetStore(this).all().firstOrNull { it.id == id }
       if (preset != null) {
         if (BuildConfig.DEMO) Toast.makeText(this, Vehicle.recall(this, preset).message, Toast.LENGTH_LONG).show()
-        else Vehicle.requestRecall(this,preset) { result -> Toast.makeText(this,result.message,Toast.LENGTH_LONG).show() }
+        else Vehicle.requestRecall(this,preset,origin=RecallOrigin.PANEL) { result -> Toast.makeText(this,result.message,Toast.LENGTH_LONG).show() }
       }
     }, previewOnly = !BuildConfig.DEMO)
     val params = PanelPlacement.params(this)

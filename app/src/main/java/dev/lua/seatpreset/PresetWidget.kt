@@ -24,7 +24,7 @@ class PresetWidget : AppWidgetProvider() {
       val id = intent.getStringExtra("preset-id") ?: return
       val preset = runCatching { PresetStore(context).all().firstOrNull { it.id == id } }.getOrNull() ?: return
       val pending=goAsync()
-      Vehicle.requestRecall(context,preset) { result ->
+      Vehicle.requestRecall(context,preset,origin=RecallOrigin.WIDGET) { result ->
         try { Toast.makeText(context,result.message,Toast.LENGTH_LONG).show() } finally { pending.finish() }
       }
     }
@@ -60,6 +60,7 @@ class PresetWidget : AppWidgetProvider() {
       return views
     }
     fun refresh(context: Context) {
+      if(!BuildConfig.DEMO) return // DiLink 5 uses the floating home panel.
       val manager = AppWidgetManager.getInstance(context)
       val ids = manager.getAppWidgetIds(ComponentName(context, PresetWidget::class.java))
       WidgetDiagnostics.record(context, "refresh bound=${ids.joinToString()}")

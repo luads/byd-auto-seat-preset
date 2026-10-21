@@ -18,6 +18,7 @@ internal class ChildShortcutMonitor(private val context: Context) {
   private var generation=0
   private var bridge: OemReadBridge?=null
   private var lastRequest=-10_000L
+  private var lastObserved: Pair<Int?,Int?>?=null
   fun refresh() {
     val allowed=runCatching {
       StorageAccess.unlocked(context) && SeatControl.enabled(context) && ChildBindings(context).enabled &&
@@ -26,7 +27,7 @@ internal class ChildShortcutMonitor(private val context: Context) {
     }.getOrDefault(false)
     if(!allowed) { stop();return }
     if(active) return
-    active=true;generation++;recognizer.reset();tick(generation)
+    active=true;generation++;lastObserved=null;recognizer.reset();tick(generation)
   }
   private fun tick(token:Int) {
     if(!active || token!=generation) return
@@ -41,14 +42,20 @@ internal class ChildShortcutMonitor(private val context: Context) {
       val at=SystemClock.elapsedRealtime();reading.set(false)
       main.post {
         if(!active || token!=generation) return@post
+        val observed=result?.let { it.first to it.second }
+        if(observed!=lastObserved) {
+          SeatDiagnostics.event(context,"child-input","sampledAtMs=$at rawLeft=${observed?.first} rawRight=${observed?.second} reportedP=${result?.third} baseline=${lastObserved==null} noStartupAction=true")
+          lastObserved=observed
+        }
         val side=if(result?.third==true) recognizer.sample(ChildSample(at,result.first,result.second)) else { recognizer.reset();null }
         if(side!=null && at-lastRequest>=1500) {
           runCatching {
             val mapped=ChildBindings(context).preset(side)
+            SeatDiagnostics.event(context,"child-input","recognizedSide=$side sampledAtMs=$at mappedId=${mapped?.id} saved=${mapped?.position!=null}")
             if(mapped?.position!=null && ChildBindings(context).enabled) {
               lastRequest=at
               PrivateDiagnostics.record(context,"child shortcut side=$side requests mapped preset")
-              Vehicle.requestRecall(context,mapped) { result -> android.widget.Toast.makeText(context,result.message,android.widget.Toast.LENGTH_LONG).show() }
+              Vehicle.requestRecall(context,mapped,origin=RecallOrigin.CHILD_LOCK) { result -> android.widget.Toast.makeText(context,result.message,android.widget.Toast.LENGTH_LONG).show() }
             }
           }
         }

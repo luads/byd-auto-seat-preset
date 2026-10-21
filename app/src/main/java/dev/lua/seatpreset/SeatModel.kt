@@ -25,6 +25,7 @@ interface VehicleAdapter {
   val resultMessage: String? get() = null
   val recallValidated: Boolean
   fun accepts(position: Position): Boolean = position.source == source && position.coordinateFormat == coordinateFormat
+  fun failed(error: Exception) {}
   fun snapshot(): VehicleSnapshot
   fun capture(): Position?
   fun apply(position: Position): Boolean
@@ -40,9 +41,9 @@ class RecallController(private val vehicle: VehicleAdapter, private val clock: (
     }
     RecallPolicy.blockReason(vehicle.snapshot(), clock())?.let { return RecallResult(false, it) }
     return try {
-      if (!vehicle.apply(position)) RecallResult(false, "Recall could not be verified")
+      if (!vehicle.apply(position)) RecallResult(false, vehicle.resultMessage ?: "Recall could not be verified")
       else RecallResult(true, vehicle.resultMessage ?: "${preset.name}: preset recalled")
-    } catch (_: Exception) { RecallResult(false, "Recall failed") }
+    } catch (error: Exception) { runCatching { vehicle.failed(error) }; RecallResult(false, "Recall failed") }
   }
 }
 

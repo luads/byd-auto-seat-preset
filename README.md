@@ -3,11 +3,11 @@
 Pre-alpha Android app for two favourite driving presets on BYD DiLink 5.
 Dark matte cards, editable driver names, preset backups and an optional home panel.
 
-Seat movement is **off by default**. Enable it in Settings to load saved driver-seat axes from
-cards, the home panel or mapped child-lock doubles while in P with parking brake applied.
-This is pre-alpha, owner-operated control: keep native controls within reach and only use when
-movement can be physically undone. Unavailable axes are skipped. NFC identity remains unproven.
-Nothing recalls a preset on startup or update.
+**Diagnostic build: live seat writes are paused.** A parked recall produced unintended travel.
+The app can open and record positions, but card, panel, child-lock and editor requests cannot
+send seat commands. Existing presets remain observations with unverified units, not validated
+movement targets. Developer mode includes a private read-only saved-position inspection and an explicit vehicle-read permission setup, including the parking-brake factory permission.
+Nothing recalls a preset on startup or update. NFC identity remains unproven.
 New installs use generic Driver 1 and Driver 2 labels; names are local preferences.
 
 ## Install
@@ -30,13 +30,20 @@ signature. **Install updates automatically** is off by default and uses the app'
 Without that access, use the Android installer option. Checks run while the app is naturally alive;
 there is no always-on update worker, VPN, wake lock or wakeup alarm.
 
-Hold a preset card to save the current driver's seat position while in P. Tap a saved card to load its available axes after enabling Seat movement. No calibration loop.
+Hold a preset card to save the current driver's seat position while in P. Live loading remains paused until the setter contract is verified. No calibration loop.
 
+The live app uses a floating home panel. Standard Android widget setup and the old trial screens are removed.
 The optional home panel stays visible on home while P is reported, without a preview timeout.
 It hides when another window opens, the screen turns off or gear becomes non-P/unknown.
 Panel taps and opt-in child-lock doubles use the same recall controller as the app. File backup is a developer
 tool on supported devices. Sharing was removed because the car has no usable share targets.
 Presets and keys stay private on the device; exported preset backups contain personal data.
+
+Developer tools has **Set up vehicle readings**, **Inspect saved positions** and **View private report**.
+The private report records capture attempts, persisted save readback, request origins, raw P/parking-brake
+checks, child-lock state changes and failure causes. It is capped at 128,000 characters and is separate
+from setup logs. Early pending memory cannot survive process death. Telegram transfer is not yet
+implemented; a separate ADB Lab integration handoff describes an explicit owner-approved log-only path.
 
 ## Development
 

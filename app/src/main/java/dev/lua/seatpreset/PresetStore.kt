@@ -37,7 +37,17 @@ class PresetStore(private val context: Context) {
   fun save(presets: List<Preset>) = synchronized(lock) { StorageAccess.requireUnlocked(context);
     val loaded = repository.load(); check(!loaded.recovered) { "Confirm the recovered presets first" }; val old = loaded.document
     require(old.favourites.all { id -> presets.any { it.id == id } }) { "A favourite cannot be removed" }
+    val changed=presets.filter { next -> old.presets.firstOrNull { it.id==next.id }?.let { it.position!=next.position || it.capturedAtMs!=next.capturedAtMs } ?: (next.position!=null) }
+    changed.forEach { next ->
+      SeatDiagnostics.event(context,"preset-save","presetId=${next.id} capturedAtWallMs=${next.capturedAtMs} "+SeatDiagnostics.position("requested",next.position))
+    }
     repository.save(old.copy(presets = presets)); mirror()
+    val persisted=repository.load().document.presets
+    changed.forEach { next ->
+      val actual=persisted.first { it.id==next.id }
+      check(actual==next) { "Preset readback did not match" }
+      SeatDiagnostics.event(context,"preset-save","presetId=${actual.id} capturedAtWallMs=${actual.capturedAtMs} "+SeatDiagnostics.position("persisted",actual.position))
+    }
   }
   fun favourites(): List<Preset> = synchronized(lock) { StorageAccess.requireUnlocked(context);
     val doc = runCatching { repository.load().document }.getOrElse { PresetCodec.defaults() }

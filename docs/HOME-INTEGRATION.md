@@ -6,7 +6,7 @@ Investigated 2026-10-03 on the owner's Australian Sealion 7. All device operatio
 
 The standard pin flow creates our Android widget, but it binds to Launcher3's inactive host. The native dashboard card host is inside SystemUI. Changing our RemoteViews size, configuration activity or pin callback cannot move the widget into that host.
 
-No app-accessible route for adding an arbitrary third-party widget to the native dashboard was found in the inspected card paths. Keep the standard AppWidget for conventional launchers and emulator tests. Explore an opt-in home-only floating panel for this car.
+No app-accessible route for adding an arbitrary third-party widget to the native dashboard was found in the inspected card paths. The live flavor disables the standard AppWidget provider and removes its setup UI. The demo flavor retains the provider for conventional launchers and emulator tests. Use the opt-in home-only floating panel on this car.
 
 ## Live evidence
 

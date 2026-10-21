@@ -8,22 +8,25 @@ android {
     applicationId = "dev.lua.seatpreset"
     minSdk = 29
     targetSdk = 29
-    versionCode = providers.gradleProperty("seatVersionCode").orNull?.toInt() ?: 13
-    versionName = providers.gradleProperty("seatVersionName").orNull ?: "0.1.12"
+    versionCode = providers.gradleProperty("seatVersionCode").orNull?.toInt() ?: 15
+    versionName = providers.gradleProperty("seatVersionName").orNull ?: "0.1.14"
     testInstrumentationRunner = "android.test.InstrumentationTestRunner"
   }
-  buildFeatures { buildConfig = true }
+  buildFeatures { buildConfig = true; compose = true }
+  composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
   flavorDimensions += "vehicle"
   productFlavors {
     create("demo") {
       dimension = "vehicle"
       applicationIdSuffix = ".demo"
       buildConfigField("boolean", "DEMO", "true")
+      manifestPlaceholders["standardWidgetEnabled"] = "true"
       resValue("string", "app_name", "Seat Presets Demo")
     }
     create("live") {
       dimension = "vehicle"
       buildConfigField("boolean", "DEMO", "false")
+      manifestPlaceholders["standardWidgetEnabled"] = "false"
       resValue("string", "app_name", "Seat Presets")
     }
   }
@@ -47,4 +50,9 @@ android {
   packaging { resources { excludes += setOf("META-INF/LICENSE.md", "META-INF/LICENSE-notice.md", "META-INF/NOTICE.md", "/META-INF/{AL2.0,LGPL2.1}") } }
   lint { disable += "ExpiredTargetSdkVersion" }
 }
-dependencies { implementation("dev.mobile:dadb:1.2.10"); testImplementation("junit:junit:4.13.2"); testImplementation("org.json:json:20240303") }
+dependencies {
+  implementation(platform("androidx.compose:compose-bom:2024.02.00"))
+  implementation("androidx.activity:activity-compose:1.8.2")
+  implementation("androidx.compose.ui:ui")
+  implementation("androidx.compose.material3:material3")
+  implementation("dev.mobile:dadb:1.2.10"); testImplementation("junit:junit:4.13.2"); testImplementation("org.json:json:20240303") }

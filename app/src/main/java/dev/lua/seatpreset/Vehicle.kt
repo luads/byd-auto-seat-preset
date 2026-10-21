@@ -48,29 +48,41 @@ class DemoVehicle(context: Context) : VehicleAdapter {
   fun position() = prefs.getInt("position", 40)
 }
 
+enum class RecallOrigin { CARD, PANEL, CHILD_LOCK, WIDGET, EDITOR }
+
 object Vehicle {
   private val recallWorker=java.util.concurrent.Executors.newSingleThreadExecutor()
   private val inFlight=java.util.concurrent.atomic.AtomicBoolean(false)
-  fun requestRecall(context: Context,preset: Preset,axes: Set<String>?=null,done: (RecallResult)->Unit) {
+  fun requestRecall(context: Context,preset: Preset,axes: Set<String>?=null,origin: RecallOrigin=RecallOrigin.CARD,done: (RecallResult)->Unit) {
     if(!inFlight.compareAndSet(false,true)) { done(RecallResult(false,"A seat request is already running"));return }
     val app=context.applicationContext
     val requestedAt=SystemClock.elapsedRealtime()
     recallWorker.execute {
-      val result=try { recall(app,preset,axes,requestedAt) } finally { inFlight.set(false) }
+      val result=try { recall(app,preset,axes,requestedAt,origin) } finally { inFlight.set(false) }
       android.os.Handler(android.os.Looper.getMainLooper()).post { done(result) }
     }
   }
   fun adapter(context: Context): VehicleAdapter = if (BuildConfig.DEMO) DemoVehicle(context) else LiveVehicle(context)
-  fun recall(context: Context, preset: Preset,axes: Set<String>?=null,requestedAt: Long=SystemClock.elapsedRealtime()): RecallResult {
-    if (!BuildConfig.DEMO && !SeatControl.enabled(context)) return RecallResult(false,"Enable Seat movement in Settings first")
-    if (!StorageAccess.unlocked(context)) return RecallResult(false, "Storage is not ready")
-    return runCatching {
-      val store = PresetStore(context)
-      val result = if (store.storageMessage() != null) RecallResult(false, "Review preset storage in Settings before use")
-        else RecallController(if(BuildConfig.DEMO) adapter(context) else LiveVehicle(context,axes,requestedAt), SystemClock::elapsedRealtime).recall(preset)
-      runCatching { store.result = result.message }
+  fun recall(context: Context, preset: Preset,axes: Set<String>?=null,requestedAt: Long=SystemClock.elapsedRealtime(),origin: RecallOrigin=RecallOrigin.CARD): RecallResult {
+    val trace=java.util.UUID.randomUUID().toString()
+    if (!BuildConfig.DEMO) {
+      SeatDiagnostics.event(context,trace,"request origin=$origin presetId=${preset.id} capturedAtWallMs=${preset.capturedAtMs} requestedAtMs=$requestedAt axes=${axes ?: "all"}")
+      SeatDiagnostics.event(context,trace,SeatDiagnostics.position("requested",preset.position))
+    }
+    val result=runCatching {
+      if (!StorageAccess.unlocked(context)) return@runCatching RecallResult(false, "Storage is not ready")
+      if (!BuildConfig.DEMO && !SeatControl.enabled(context)) return@runCatching RecallResult(false,"Enable Seat movement in Settings first")
+      val store=PresetStore(context)
+      val value=if(store.storageMessage()!=null) RecallResult(false,"Review preset storage in Settings before use")
+        else RecallController(if(BuildConfig.DEMO) adapter(context) else LiveVehicle(context,axes,requestedAt,trace),SystemClock::elapsedRealtime).recall(preset)
+      runCatching { store.result=value.message }
       runCatching { PresetWidget.refresh(context) }
-      result
-    }.getOrElse { RecallResult(false, "Recall unavailable") }
+      value
+    }.getOrElse {
+      if(!BuildConfig.DEMO) SeatDiagnostics.event(context,trace,"failure="+SeatDiagnostics.failure(it))
+      RecallResult(false,"Recall unavailable")
+    }
+    if(!BuildConfig.DEMO) SeatDiagnostics.event(context,trace,"result allowed=${result.allowed} message=${result.message} finishedAtMs=${SystemClock.elapsedRealtime()}")
+    return result
   }
 }

@@ -1,3 +1,5 @@
+> Current diagnostic builds block all live seat writes. The old supervised movement and child-lock trial screens are removed. Use Developer tools > Inspect saved positions for read-only investigation. The historical procedure below is not runnable in this build. See [the recall contract investigation](SEAT-RECALL-CONTRACT.md) before any future actuation test.
+
 # Owner-operated saved presets, 0.1.12
 
 ## Use

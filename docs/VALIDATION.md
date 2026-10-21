@@ -1,5 +1,15 @@
 # Pre-alpha validation
 
+## 0.1.14, 2026-10-21
+
+105 JVM tests passed in each of demo/live debug/release, with zero failures or errors. All four lint variants have zero errors. Both debug and signed release APKs build. The live release signing certificate matches the established public key.
+
+Real Android 11 emulator UI checks exercised rename/save/readback, distinct favourite swaps, left/right child mappings, movement opt-in persistence, confirmation cancellation, unchanged preset coordinates, retained scroll on a preference update, Settings Back and a narrower window recreation. Generic screenshots remain local. The smoke harness now scrolls in the card gutter to avoid its gesture being consumed by the embedded native panel preview.
+
+The live write hold is enforced in the shared path and again at OEM writer binding/invocation. Neither this validation nor readiness performs seat movement. New read-permission setup, bodywork getter candidates, Compose on DiLink and overnight behavior still need a connected-car check. See SEAT-RECALL-CONTRACT.md and RELEASE-0.1.14.md.
+
+## Historical 0.1.8 validation
+
 The live adapter remains disabled. No physical seat movement or phone-based selection is tested.
 
 JVM tests cover preset storage, eligibility, startup storage/key safeguards, log isolation,
@@ -29,7 +39,7 @@ The README is deliberately short. All four JVM variants passed 60 tests each; fi
 instrumentation tests passed. Debug and signed release builds succeeded; all four lint runs had
 zero errors (35 debug warnings, 36 release warnings).
 
-Current native captures: [presets](screenshots/presets-018.png),
+Historical native captures: [presets](screenshots/presets-018.png),
 [settings](screenshots/settings-018.png), [home panel](screenshots/panel-018.png).
 UIAutomator suppresses the accessibility observer during inspection; capture the panel directly
 after a fresh HOME event, without dumping the hierarchy first.

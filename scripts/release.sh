@@ -27,7 +27,7 @@ VC="$(sed -nE 's/.*versionCode = .*\?: ([0-9]+).*/\1/p' app/build.gradle.kts | h
 [ -n "$VN" ] && [ -n "$VC" ] || { echo "Version fields are missing"; exit 1; }
 if gh release view "v$VN" --repo "$REPO" >/dev/null 2>&1; then echo "Version already exists; bump both version fields"; exit 1; fi
 export JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home}"
-./gradlew test lintDemoRelease lintLiveRelease assembleDemoRelease assembleLiveRelease
+./gradlew --no-daemon --max-workers=1 -Dorg.gradle.jvmargs=-Xmx768m -Pkotlin.compiler.execution.strategy=in-process test lintDemoRelease lintLiveRelease assembleDemoRelease assembleLiveRelease
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 for FLAVOR in demo live; do
