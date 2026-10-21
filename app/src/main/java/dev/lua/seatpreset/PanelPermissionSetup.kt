@@ -11,7 +11,8 @@ object PanelPermissionSetup {
     val beforeOverlay = Settings.canDrawOverlays(context)
     val beforeWrite = Startup.canWrite(context)
     try {
-    run {
+    // Already-granted access must not depend on another loopback authentication attempt.
+    if(!beforeOverlay || !beforeWrite) run {
       val key = checkNotNull(PresetChannel.key(context))
       Dadb.create("127.0.0.1", 5555, key, connectTimeout = 3_000, socketTimeout = 10_000).use { adb ->
         check(adb.shell("echo seat-preset-ready").exitCode == 0) { "Setup authentication failed" }

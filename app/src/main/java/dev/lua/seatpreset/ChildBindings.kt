@@ -6,6 +6,9 @@ import android.content.Context
 class ChildBindings(context: Context) {
   private val prefs get() = StorageAccess.prefs(context, "child-bindings")
   private val context = context.applicationContext
+  var enabled: Boolean
+    get()=prefs.getBoolean("enabled",false)
+    set(value) { check(prefs.edit().putBoolean("enabled",value).commit()) }
   fun preset(side: ChildSide): Preset? {
     val id = prefs.getString(side.name, null) ?: return null
     return PresetStore(context).all().firstOrNull { it.id == id }

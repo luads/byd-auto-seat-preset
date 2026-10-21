@@ -1,35 +1,23 @@
-# Parked tests, 0.1.11
+# Owner-operated saved presets, 0.1.12
 
-## Record a preset
+## Use
 
-Park in P. Set the driver's seat with the native controls. Hold the preset card, then Save. This replaces only that preset's stored coordinates and keeps its favourite assignment. The app checks reported P and compares two reads 200 ms apart. Missing, changing, non-finite, all-zero or out-of-candidate-range data cannot be saved. No movement is sent. Units and cache freshness remain unverified; recordings are not phone identity.
+1. In P, set the desired driver-seat position with native controls. Hold a favourite card and Save. It replaces only that preset's coordinates.
+2. Enable Settings > Seat movement > Load saved presets only when native controls are within reach and movement can be physically undone. This choice is off by default and does not itself move anything.
+3. Tap a saved card or panel favourite to load its usable saved axes. No A-B-A recording or calibration loop remains. To change a stored target explicitly, use Edit > Adjust saved target, then Save target. Saving alone never moves the seat.
+4. Assign left/right doubles under Child-lock shortcuts, then opt into Use child-lock shortcuts in P. Recognized doubles use the same recall controller. The input reader runs in the existing home accessibility service only while awake, enabled and reporting P. No wake locks/alarms, boot movement or request replay.
+5. Turn Seat movement off to block all entry points. This stops future axis commands, not an already-running motor; native interruption is not yet validated.
 
-## Home panel
+## Eligibility and evidence
 
-Settings → Home panel → Set up, if access is missing. Enable Show panel on home in P. Return to the actual launcher home screen. The panel has no 30-second timeout. It hides on other window identities, screen off, disabled access or non-P/unknown gear. Gear comes from Settings.Global sys.share.gpack.agent.data → gearMode; only the field is extracted, never the VIN-containing row. A ContentObserver updates visibility on changes, with no polling or wake locks. Reported P authorizes display only, not movement. Cached P after sleep is still a field limitation.
+Gear is Settings.Global sys.share.gpack.agent.data -> gearMode (1=P); brake is getEPBState()==3. The full settings row contains identity data and is never logged. Getter-return sample time is recorded with a monotonic clock but does not prove underlying cache freshness. This remains an owner-enabled experimental control route, not a certified physical interlock.
 
-Check home → global menu → home, app switching, reverse camera, screen-off/wake and P → R/N/D → P. If the launcher does not emit distinct window events for its menu, that case needs further launcher evidence. Panel tiles open the selected saved-position test in the app; they do not send background commands.
+Saved metadata must match this firmware/OEM source. Missing, non-finite, fractional or endpoint coordinates do not become fabricated setpoints. A zero axis is skipped because it can be a fallback. The field report showed horizontal=0 with nonzero backrest/height; the old calibration defaulted to horizontal and never became ready. Only usable axes can be loaded. Void setter returns are not called physical completion. Private command/seat observations remain private and are not automatically exported.
 
-## Child-lock shortcuts
+## Home fix
 
-Settings → Child-lock shortcuts. Assign Left double tap and Right double tap to presets, or Off. Test shortcuts arms a 10-second foreground window. Wait for READY in P. The exact getter is getDoorLockStatus(int), areas 6 left and 7 right, valid raw states 1/2. Startup samples, unknown gear, invalid values and sampling gaps do not emit gestures. Recognized gestures display the mapped preset on screen only. Mapping does not yet enable automatic seat application or continuous input polling. Bindings are local credential-protected preferences and persistence failures are reported.
+The car emits com.android.launcher3.home.MainActivity followed by com.android.systemui/android.widget.RelativeLayout for its dashboard cards. Preserve the known dashboard overlay only after a real Home event. MoreAppActivity and other activities hide the panel. Own non-focusable overlay events are ignored. Verify home/menu/home, other apps, screen-off and P/non-P transitions. The 30-second bypass service remains removed.
 
-## Test a saved axis
+## Validation
 
-Tap a saved card. No Developer mode is needed.
-
-1. Choose one axis. Record current A.
-2. Use native controls to change only that axis to the saved position B. Record B. Check driver-seat mapping and that native controls interrupt movement.
-3. Return to A and record. All other axes must match, A must return exactly, and selected values must be integral within the candidate percentage range.
-4. Tap Move saved axis. The target must be within the observed native A/B range, not an extrapolation. Confirm physical P, parking brake, clear space and remaining at the native controls. The Settings gearMode and getEPBState()==3 are additional vetoes, not fresh telemetry claims.
-5. Move now sends one driver-area-1 percentage setter only. Confirmation expires after two seconds; source mismatch, storage failure, leaving the screen, invalid P/brake and stale data block the command. Calibration expires after five minutes and never survives leaving the activity. No movement request is persisted or replayed.
-
-The earlier arbitrary 1–2 unit restriction is replaced by the range you verified through native controls. Full multi-axis recall, completion/interruption semantics and automatic child-lock actuation still need actual setter evidence. The app reports command return/readback, not proven movement completion. No developer-operated physical car write is used for validation.
-
-## Settings and private data
-
-Normal Settings contains drivers, home panel, child shortcuts, startup and updates. Sharing is removed because the car has no usable share targets. File backup is kept in Developer mode for supported hosts; neither unsupported file export nor sharing is presented as a normal setup step. Private trial reports remain viewable/clearable locally. Keys, raw identity/VIN and private reports are not sent automatically. Unflushed in-memory logs cannot survive process death.
-
-## Software checks
-
-Tests cover startup/storage, preserved keys, recovery policy, deferred/public/private logs, gear parsing, home/gear/screen gating, input recognition, preset storage and one-shot native-range movement consent. Actual BYD window callbacks, getter freshness, OEM permission/setter behavior and overnight visibility still require car tests. The emulator stays off for host memory reasons.
+Host tests and lint cover contracts and guards, not actual vehicle response. Install the stable-signed APK in place, verify the switch starts off, test no-motion UI/setup/home paths first, then let the owner enable and initiate the first command. No developer-operated seat command is part of validation. Confirm actual movement and native interruption before relying on shortcuts. Overnight cache/CPU/12V behavior remains a field check.

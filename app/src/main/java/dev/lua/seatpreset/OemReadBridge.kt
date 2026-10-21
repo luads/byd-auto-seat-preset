@@ -23,7 +23,7 @@ internal class OemReadBridge(private val context: Context) {
     cls.getMethod("getInstance", Context::class.java).invoke(null, context.applicationContext)
       ?: error("Device is not ready")
   }
-  private fun number(kind: String, name: String, area: Int? = null): Double {
+  private fun number(kind: String, name: String, area: Int? = null): Double = GetterReadiness.read {
     StorageAccess.requireUnlocked(context)
     require(name in setOf("getSeatHorization", "getSeatbackrestPostion", "getSeatTurnHeight", "getDoorLockStatus", "getEPBState"))
     val obj = device(kind)
@@ -31,10 +31,19 @@ internal class OemReadBridge(private val context: Context) {
     val expected = if (name in setOf("getSeatbackrestPostion", "getSeatTurnHeight")) Float::class.javaPrimitiveType else Int::class.javaPrimitiveType
     check(method.returnType == expected) { "Getter signature changed" }
     val value = if (area == null) method.invoke(obj) else method.invoke(obj, area)
-    return (value as? Number)?.toDouble()?.takeIf { it.isFinite() } ?: error("Getter is unavailable")
+    (value as? Number)?.toDouble()?.takeIf { it.isFinite() } ?: error("Getter is unavailable")
   }
   fun seat(): Position {
-    val values = linkedMapOf("horizontal" to number("setting", "getSeatHorization", 1),
+    val typedHorizontal=number("setting","getSeatHorization",1)
+    val fallback=if(typedHorizontal==0.0) runCatching {
+      val key=PresetChannel.key(context,firstUse=false) ?: return@runCatching null
+      dadb.Dadb.create("127.0.0.1",5555,key,connectTimeout=400,socketTimeout=1500).use { channel ->
+        val result=channel.shell(SeatPropertyRead.COMMAND)
+        if(result.exitCode==0) SeatPropertyRead.parse(result.output) else null
+      }
+    }.getOrNull() else null
+    if(fallback!=null) PrivateDiagnostics.record(context,"fore/aft property observation cacheAtNs=${fallback.cacheAtNs} sampledAtMs=${android.os.SystemClock.elapsedRealtime()}")
+    val values = linkedMapOf("horizontal" to (fallback?.percent ?: typedHorizontal),
       "backrest" to number("setting", "getSeatbackrestPostion", 1), "height" to number("setting", "getSeatTurnHeight", 1))
     PrivateDiagnostics.record(context, "raw seat getter returns at=${android.os.SystemClock.elapsedRealtime()} driverArea=1 values=$values")
     check(SeatObservation.usable(values)) { "Seat readings are unavailable or outside the candidate range" }

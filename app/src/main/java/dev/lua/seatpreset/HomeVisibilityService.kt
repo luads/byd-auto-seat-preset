@@ -14,7 +14,12 @@ import android.widget.Toast
 /** Window identity only. No node retrieval, event text, key interception or polling. */
 class HomeVisibilityService : AccessibilityService() {
   private var panel: View? = null
+  private val shortcuts by lazy { ChildShortcutMonitor(this) }
   private var homeVisible = false
+  private val resolver=java.util.concurrent.Executors.newSingleThreadExecutor()
+  private val resolving=java.util.concurrent.atomic.AtomicBoolean(false)
+  private var windowGeneration=0
+  private var resolveWanted=false
   private val handler = android.os.Handler(android.os.Looper.getMainLooper())
   private val gearChanges = object : android.database.ContentObserver(handler) {
     override fun onChange(selfChange: Boolean) { refreshVehicle() }
@@ -25,7 +30,7 @@ class HomeVisibilityService : AccessibilityService() {
   private var homePackage: String? = null
   private var homeClass: String? = null
   private val screenOff = object : BroadcastReceiver() {
-    override fun onReceive(context: Context?, intent: Intent?) { hide() }
+    override fun onReceive(context: Context?, intent: Intent?) { shortcuts.stop();hide() }
   }
   override fun onServiceConnected() {
     super.onServiceConnected(); reference = java.lang.ref.WeakReference(this)
@@ -39,20 +44,51 @@ class HomeVisibilityService : AccessibilityService() {
     hide()
   }
   override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+    shortcuts.refresh()
     if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
     Startup.retry(this)
     runCatching {
       StorageAccess.requireUnlocked(this)
       val pkg = event.packageName?.toString(); val cls = event.className?.toString()
       // Our non-focusable overlay can announce its root without changing the foreground activity.
-      if (panel != null && pkg == packageName && cls == "android.widget.LinearLayout") return
+      if (panel != null && pkg == packageName && cls in setOf("android.widget.LinearLayout", "android.widget.FrameLayout")) return
+      windowGeneration++
+      if(pkg=="com.android.systemui" && cls=="android.widget.RelativeLayout") {
+        resolveWanted=true;resolveDashboard();return
+      }
+      resolveWanted=false
       val home = HomePanelPolicy.isHome(homePackage, homeClass, pkg, cls)
       homeVisible = home
       if (home) refreshVehicle() else hide()
     }.onFailure { hide(); WidgetDiagnostics.record(this, "home observer failed ${it.javaClass.simpleName}") }
   }
+  // BYD does not always announce Home again when its global menu is dismissed.
+  // Resolve only ambiguous dashboard events, using the existing authorized read-only channel.
+  private fun resolveDashboard() {
+    if(!resolving.compareAndSet(false,true)) return
+    val token=windowGeneration
+    resolver.execute {
+      val home=runCatching {
+        val key=PresetChannel.key(this,firstUse=false) ?: return@runCatching false
+        dadb.Dadb.create("127.0.0.1",5555,key,connectTimeout=400,socketTimeout=1500).use { channel ->
+          val result=channel.shell("dumpsys activity activities | grep -m 1 'mResumedActivity:'")
+          if(result.exitCode!=0) false else {
+            val flat=Regex("u[0-9]+ +([^ ]+/[^ ]+)").find(result.output)?.groupValues?.get(1)
+            val component=flat?.let { android.content.ComponentName.unflattenFromString(it) }
+            HomePanelPolicy.isHome(homePackage,homeClass,component?.packageName,component?.className)
+          }
+        }
+      }.getOrDefault(false)
+      handler.post {
+        resolving.set(false)
+        if(resolveWanted && token==windowGeneration) { homeVisible=home;if(home) refreshVehicle() else hide() }
+        else if(resolveWanted) resolveDashboard()
+      }
+    }
+  }
   // Home/window callbacks and setting notifications only. No periodic OEM polling.
   fun refreshVehicle() {
+    shortcuts.refresh()
     runCatching {
     StorageAccess.requireUnlocked(this)
     val settings = HomePanelSettings(this)
@@ -80,7 +116,7 @@ class HomeVisibilityService : AccessibilityService() {
       val preset = PresetStore(this).all().firstOrNull { it.id == id }
       if (preset != null) {
         if (BuildConfig.DEMO) Toast.makeText(this, Vehicle.recall(this, preset).message, Toast.LENGTH_LONG).show()
-        else { hide(); startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra("test-preset-id", id)) }
+        else Vehicle.requestRecall(this,preset) { result -> Toast.makeText(this,result.message,Toast.LENGTH_LONG).show() }
       }
     }, previewOnly = !BuildConfig.DEMO)
     val params = PanelPlacement.params(this)
@@ -109,7 +145,7 @@ class HomeVisibilityService : AccessibilityService() {
   override fun onInterrupt() { hide() }
   override fun onConfigurationChanged(newConfig: android.content.res.Configuration) { super.onConfigurationChanged(newConfig); hide() }
   override fun onDestroy() {
-    hide(); handler.removeCallbacksAndMessages(null)
+    resolveWanted=false;windowGeneration++;resolver.shutdownNow();shortcuts.destroy();hide(); handler.removeCallbacksAndMessages(null)
     runCatching { if (BuildConfig.DEMO) StorageAccess.prefs(this, "demo-vehicle").unregisterOnSharedPreferenceChangeListener(demoChanges) }
     runCatching { contentResolver.unregisterContentObserver(gearChanges) }; runCatching { unregisterReceiver(screenOff) }; if (instance === this) reference.clear()
     super.onDestroy()

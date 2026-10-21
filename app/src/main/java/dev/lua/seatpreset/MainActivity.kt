@@ -95,7 +95,7 @@ class MainActivity : Activity() {
 
   private fun renderPresets() {
     val vehicle = Vehicle.adapter(this)
-    val block = if (BuildConfig.DEMO) RecallPolicy.blockReason(vehicle.snapshot(), android.os.SystemClock.elapsedRealtime()) else "Hold a card to save your position. Tap to test a saved position."
+    val block = if (BuildConfig.DEMO) RecallPolicy.blockReason(vehicle.snapshot(), android.os.SystemClock.elapsedRealtime()) else if(SeatControl.enabled(this)) "Hold to save. Tap to load in P." else "Seat movement is off. Enable it in Settings."
     page.addView(text(block ?: "P · parking brake confirmed", 16f, if (block == null) getColor(R.color.matte_ready) else getColor(R.color.matte_caution)))
     val wide = resources.configuration.screenWidthDp >= 600
     val favourites = store.favourites()
@@ -114,7 +114,7 @@ class MainActivity : Activity() {
             runCatching {
               if (!saved) toast("Hold this card to save the current position")
               else if (BuildConfig.DEMO) { toast(Vehicle.recall(this@MainActivity, preset).message); render() }
-              else openMovement(preset)
+              else Vehicle.requestRecall(this@MainActivity,preset) { result -> if(!isDestroyed) { toast(result.message);render() } }
             }.onFailure { toast(it.message ?: "Action failed") }
           }
         }
@@ -134,7 +134,7 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(-1, dp(if (wide) 240 else 180)))
         val footer = row().apply { gravity = android.view.Gravity.CENTER_VERTICAL; if (!wide) orientation = LinearLayout.VERTICAL }
         footer.addView(text(if (saved) "Position saved" else "No position saved", 16f, mutedColor), if (wide) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2))
-        footer.addView(text(if (saved) { if (BuildConfig.DEMO) "Use preset  →" else "Test position  →" } else "Hold to save", 18f, accentColor))
+        footer.addView(text(if (saved) { if (BuildConfig.DEMO) "Use preset  →" else "Use preset  →" } else "Hold to save", 18f, accentColor))
         card.addView(footer)
         val params = if (wide) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2)
         params.setMargins(dp(6), dp(24), dp(6), dp(16))
@@ -238,6 +238,18 @@ class MainActivity : Activity() {
         })
       }
     }
+    group("Seat movement") {
+      page.addView(Switch(this).apply {
+        text="Load saved presets";setTextColor(textColor);isChecked=SeatControl.enabled(this@MainActivity)
+        setOnCheckedChangeListener { _,on ->
+          if(!on) { runCatching { SeatControl.enable(this@MainActivity,false);HomeVisibilityService.instance?.refreshVehicle() }.onFailure { toast("Could not save movement choice") };render() }
+          else android.app.AlertDialog.Builder(this@MainActivity).setTitle("Enable seat movement?")
+            .setMessage("Card taps, panel taps and mapped child-lock doubles load saved driver-seat axes in P with the parking brake applied. Keep native controls within reach and use only when you can undo movement physically. Unavailable axes are skipped.")
+            .setNegativeButton("Cancel") { _,_->render() }
+            .setPositiveButton("Enable") { _,_->runCatching { SeatControl.enable(this@MainActivity,true);HomeVisibilityService.instance?.refreshVehicle() }.onFailure { toast("Could not save movement choice") };render() }.show()
+        }
+      })
+    }
     group("Home panel") {
       val panelSettings = HomePanelSettings(this)
       page.addView(text("Only on home while P is reported. Drag to move.", 16f, mutedColor))
@@ -282,7 +294,16 @@ class MainActivity : Activity() {
             .setItems((listOf("Off") + all.map { it.name }).toTypedArray()) { _, i -> runCatching { bindings.assign(side, if (i == 0) null else all[i-1]); render() }.onFailure { toast("Could not save shortcut") } }.show()
         })
       }
-      page.addView(text("Test in P. Feedback only until seat control is verified.", 15f, mutedColor))
+      page.addView(Switch(this).apply {
+        text="Use child-lock shortcuts in P";setTextColor(textColor);isChecked=ChildBindings(this@MainActivity).enabled
+        setOnCheckedChangeListener { _,on ->
+          runCatching {
+            check(!on || HomePanelSettings(this@MainActivity).observerEnabled()) { "Set up home access first" }
+            ChildBindings(this@MainActivity).enabled=on;HomeVisibilityService.instance?.refreshVehicle()
+          }.onFailure { toast(it.message ?: "Could not save shortcuts");render() }
+        }
+      })
+      page.addView(text("Double tap loads its mapped preset in P when Seat movement is enabled.",15f,mutedColor))
       page.addView(action("Test shortcuts") { startActivity(Intent(this, ChildTrialActivity::class.java)) })
     }
     root.addView(columns)
@@ -421,7 +442,7 @@ class MainActivity : Activity() {
     val preview = PresetWidget.views(this, 0).apply(this, page)
     store.favourites().forEachIndexed { slot, preset ->
       preview.findViewById<View>(if (slot == 0) R.id.favourite_one_target else R.id.favourite_two_target).setOnClickListener {
-        toast(Vehicle.recall(this, preset).message); render()
+        toast("Appearance preview only")
       }
     }
     page.addView(preview, LinearLayout.LayoutParams(dp(minOf(420, resources.configuration.screenWidthDp - 64)), dp(220)).apply { topMargin = dp(8); bottomMargin = dp(16) })
@@ -499,9 +520,10 @@ class MainActivity : Activity() {
       }.show()
   }
   private fun editPreset(preset: Preset) {
-    AlertDialog.Builder(this).setTitle(preset.name).setItems(arrayOf("Save current position…", "Rename", "Use as favourite 1", "Use as favourite 2")) { _, choice ->
+    AlertDialog.Builder(this).setTitle(preset.name).setItems(arrayOf("Save current position…", "Rename", "Use as favourite 1", "Use as favourite 2", "Adjust saved target…")) { _, choice ->
       when (choice) {
         0 -> capture(preset)
+        4 -> openMovement(preset)
         1 -> nameDialog("Rename preset", preset.name) { name -> store.save(store.all().map { if (it.id == preset.id) it.copy(name = name) else it }); changed() }
         else -> { runCatching { store.setFavourite(choice - 2, preset); changed() }.onFailure { toast(it.message ?: "Could not save favourite") } }
       }

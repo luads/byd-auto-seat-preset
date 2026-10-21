@@ -23,8 +23,10 @@ class PresetWidget : AppWidgetProvider() {
     if (intent.action == "${context.packageName}.RECALL" && StorageAccess.unlocked(context)) {
       val id = intent.getStringExtra("preset-id") ?: return
       val preset = runCatching { PresetStore(context).all().firstOrNull { it.id == id } }.getOrNull() ?: return
-      val result = Vehicle.recall(context, preset)
-      Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+      val pending=goAsync()
+      Vehicle.requestRecall(context,preset) { result ->
+        try { Toast.makeText(context,result.message,Toast.LENGTH_LONG).show() } finally { pending.finish() }
+      }
     }
   }
   companion object {

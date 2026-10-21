@@ -3,10 +3,11 @@
 Pre-alpha Android app for two favourite driving presets on BYD DiLink 5.
 Dark matte cards, editable driver names, preset backups and an optional home panel.
 
-**Normal live recall is disabled.** Experimental foreground trials can read/save driver-seat
-coordinates, detect child-lock doubles on screen, and test one observed seat-axis command with explicit
-owner confirmation. These need parked-car validation. NFC identity remains unproven. Demo builds
-simulate vehicle state. Nothing recalls a preset on startup.
+Seat movement is **off by default**. Enable it in Settings to load saved driver-seat axes from
+cards, the home panel or mapped child-lock doubles while in P with parking brake applied.
+This is pre-alpha, owner-operated control: keep native controls within reach and only use when
+movement can be physically undone. Unavailable axes are skipped. NFC identity remains unproven.
+Nothing recalls a preset on startup or update.
 New installs use generic Driver 1 and Driver 2 labels; names are local preferences.
 
 ## Install
@@ -29,13 +30,11 @@ signature. **Install updates automatically** is off by default and uses the app'
 Without that access, use the Android installer option. Checks run while the app is naturally alive;
 there is no always-on update worker, VPN, wake lock or wakeup alarm.
 
-Hold a preset card to save the current driver's seat position while in P. Tap a saved card for a
-guided single-axis movement test. Native A-B-A verification comes before an app command.
+Hold a preset card to save the current driver's seat position while in P. Tap a saved card to load its available axes after enabling Seat movement. No calibration loop.
 
 The optional home panel stays visible on home while P is reported, without a preview timeout.
 It hides when another window opens, the screen turns off or gear becomes non-P/unknown.
-Panel taps open the test in the app. Child-lock shortcuts have configurable preset mappings and
-foreground screen feedback; automatic seat application remains disabled. File backup is a developer
+Panel taps and opt-in child-lock doubles use the same recall controller as the app. File backup is a developer
 tool on supported devices. Sharing was removed because the car has no usable share targets.
 Presets and keys stay private on the device; exported preset backups contain personal data.
 

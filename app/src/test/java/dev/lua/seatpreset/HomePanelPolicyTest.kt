@@ -13,4 +13,11 @@ class HomePanelPolicyTest {
     assertEquals("a/Service:b/Service", HomePanelPolicy.services("a/Service:own/Service:b/Service", "own/Service", false))
     assertEquals("", HomePanelPolicy.services(null, "own/Service", false))
   }
+  @Test fun bydDashboardSurfacePreservesOnlyAnExistingHomeState() {
+    assertTrue(HomePanelPolicy.dashboardSurface(true,"com.android.systemui","android.widget.RelativeLayout"))
+    assertFalse(HomePanelPolicy.dashboardSurface(false,"com.android.systemui","android.widget.RelativeLayout"))
+    assertFalse(HomePanelPolicy.dashboardSurface(true,"com.android.systemui","com.byd.card.view.activity.MoreAppActivity"))
+    assertFalse(HomePanelPolicy.dashboardSurface(true,"camera","android.widget.RelativeLayout"))
+  }
+
 }

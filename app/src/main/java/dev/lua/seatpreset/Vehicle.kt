@@ -49,13 +49,25 @@ class DemoVehicle(context: Context) : VehicleAdapter {
 }
 
 object Vehicle {
-  fun adapter(context: Context): VehicleAdapter = if (BuildConfig.DEMO) DemoVehicle(context) else UnsupportedVehicle()
-  fun recall(context: Context, preset: Preset): RecallResult {
+  private val recallWorker=java.util.concurrent.Executors.newSingleThreadExecutor()
+  private val inFlight=java.util.concurrent.atomic.AtomicBoolean(false)
+  fun requestRecall(context: Context,preset: Preset,axes: Set<String>?=null,done: (RecallResult)->Unit) {
+    if(!inFlight.compareAndSet(false,true)) { done(RecallResult(false,"A seat request is already running"));return }
+    val app=context.applicationContext
+    val requestedAt=SystemClock.elapsedRealtime()
+    recallWorker.execute {
+      val result=try { recall(app,preset,axes,requestedAt) } finally { inFlight.set(false) }
+      android.os.Handler(android.os.Looper.getMainLooper()).post { done(result) }
+    }
+  }
+  fun adapter(context: Context): VehicleAdapter = if (BuildConfig.DEMO) DemoVehicle(context) else LiveVehicle(context)
+  fun recall(context: Context, preset: Preset,axes: Set<String>?=null,requestedAt: Long=SystemClock.elapsedRealtime()): RecallResult {
+    if (!BuildConfig.DEMO && !SeatControl.enabled(context)) return RecallResult(false,"Enable Seat movement in Settings first")
     if (!StorageAccess.unlocked(context)) return RecallResult(false, "Storage is not ready")
     return runCatching {
       val store = PresetStore(context)
       val result = if (store.storageMessage() != null) RecallResult(false, "Review preset storage in Settings before use")
-        else RecallController(adapter(context), SystemClock::elapsedRealtime).recall(preset)
+        else RecallController(if(BuildConfig.DEMO) adapter(context) else LiveVehicle(context,axes,requestedAt), SystemClock::elapsedRealtime).recall(preset)
       runCatching { store.result = result.message }
       runCatching { PresetWidget.refresh(context) }
       result
