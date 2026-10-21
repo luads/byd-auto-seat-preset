@@ -3,7 +3,7 @@ package dev.lua.seatpreset
 import android.content.Context
 import android.os.SystemClock
 
-/** Seat data stays in the credential-protected private report. No public logger or export path. */
+/** Seat data stays in the credential-protected private report. No public logger or automatic export path. */
 internal object SeatDiagnostics {
   fun event(context: Context, trace: String, detail: String) {
     PrivateDiagnostics.record(context, "trace=$trace " + detail.replace('\n', ' ').replace('\r', ' ').take(4096))

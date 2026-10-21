@@ -34,7 +34,7 @@ internal data class SettingsUiState(
 )
 internal enum class SettingsToggle { MOVEMENT, HOME, CHILD, STARTUP, CHECK_UPDATES, AUTO_UPDATES, DEVELOPER }
 internal enum class SettingsCommand { BACK, SETUP_HOME, RESET_PANEL, CAR_STARTUP, CHECK_UPDATES, INSTALL, INSTALLER, INSPECT,
-  PRIVATE_REPORT, CLEAR_PRIVATE, SETUP_LOG, COPY_LOG, EXPORT, IMPORT, RESTORE_CONNECTION, COPY_SETUP, DEMO, MOTION, KEEP_RECOVERY, SETUP_READS }
+  PRIVATE_REPORT, CLEAR_PRIVATE, SETUP_LOG, COPY_LOG, EXPORT, IMPORT, RESTORE_CONNECTION, COPY_SETUP, DEMO, MOTION, KEEP_RECOVERY, SETUP_READS, TRUST_LAB, SEND_DIAGNOSTICS, SEAT_TRIALS }
 internal sealed interface SettingsAction {
   data class Command(val command:SettingsCommand):SettingsAction
   data class Toggle(val setting:SettingsToggle,val enabled:Boolean):SettingsAction
@@ -254,6 +254,11 @@ internal fun SeatSettingsScreen(state:SettingsUiState,onAction:(SettingsAction)-
   fun send(command:SettingsCommand) { action(SettingsAction.Command(command)) }
   Section("Diagnostics") {
     if(!state.demo) TonalAction("Inspect saved positions",Modifier.fillMaxWidth()) { send(SettingsCommand.INSPECT) }
+    TonalAction("Native seat observation trial",Modifier.fillMaxWidth()) { send(SettingsCommand.SEAT_TRIALS) }
+    if (!state.demo) {
+    TonalAction("Trusted ADB Lab certificate",Modifier.fillMaxWidth()) { send(SettingsCommand.TRUST_LAB) }
+    TonalAction("Send diagnostics to ADB Lab",Modifier.fillMaxWidth()) { confirm(SettingsAction.Command(SettingsCommand.SEND_DIAGNOSTICS),"Prepare private diagnostics?","This transfers private seat readings, preset IDs, timing and failures to the trusted ADB Lab. It excludes preset backups and setup credentials. ADB Lab asks again before any Telegram send. No seat operation.","Prepare diagnostics") }
+    }
     ActionPair("View private report","Clear private report",{ send(SettingsCommand.PRIVATE_REPORT) },{ confirm(SettingsAction.Command(SettingsCommand.CLEAR_PRIVATE),"Clear private observations?","Remove saved and pending private diagnostic entries. Presets are kept.","Clear") })
     ActionPair("View setup log","Copy setup log",{ send(SettingsCommand.SETUP_LOG) },{ send(SettingsCommand.COPY_LOG) })
     if(state.canExport || state.canImport) {

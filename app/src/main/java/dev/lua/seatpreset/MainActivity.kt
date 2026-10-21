@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
   private var updateMessage = "Check for a public release"
   private var updateBusy = false
   private var captureBusy = false
+  private var diagnosticPreparationBusy = false
   @Volatile private var captureSession = 0
 
   private val unlockedReceiver = object : android.content.BroadcastReceiver() {
@@ -268,6 +269,9 @@ class MainActivity : ComponentActivity() {
       SettingsCommand.INSTALLER -> release?.let { download(it) }
       SettingsCommand.INSPECT -> inspectSavedPositions()
       SettingsCommand.SETUP_READS -> setupVehicleReadings()
+      SettingsCommand.SEAT_TRIALS -> startActivity(Intent(this, SeatObservationTrialActivity::class.java))
+      SettingsCommand.TRUST_LAB -> configureDiagnosticCertificate()
+      SettingsCommand.SEND_DIAGNOSTICS -> sendPrivateDiagnostics()
       SettingsCommand.PRIVATE_REPORT -> showReport("Private seat observations",PrivateDiagnostics.report(this))
       SettingsCommand.CLEAR_PRIVATE -> PrivateDiagnostics.clear(this)
       SettingsCommand.SETUP_LOG -> showReport("Setup log",WidgetDiagnostics.report(this))
@@ -281,6 +285,46 @@ class MainActivity : ComponentActivity() {
       SettingsCommand.KEEP_RECOVERY -> { store.acceptRecovery();changed() }
     }
   }
+  private fun configureDiagnosticCertificate() {
+    val input = EditText(this).apply {
+      setText(SeatDiagnosticTransfer.certificate(this@MainActivity))
+      hint = "SHA-256, 64 hexadecimal digits"
+      isSingleLine = false
+      inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+    }
+    val dialog = AlertDialog.Builder(this).setTitle("Trust ADB Lab certificate")
+      .setMessage("Enter the SHA-256 signing certificate from your trusted ADB Lab build. Do not use a fingerprint supplied by an unknown app. Blank removes trust. Each transfer checks the installed signing certificate.")
+      .setView(input).setNegativeButton("Cancel", null).setPositiveButton("Save trust", null).create()
+    dialog.setOnShowListener {
+      dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+        runCatching { SeatDiagnosticTransfer.trust(this, input.text.toString()) }
+          .onSuccess { dialog.dismiss(); toast("Diagnostic transfer trust saved") }
+          .onFailure { input.error = it.message ?: "Could not save trust" }
+      }
+    }
+    dialog.show()
+  }
+  private fun sendPrivateDiagnostics() {
+    if (diagnosticPreparationBusy) { toast("Preparing diagnostics; leave this screen to cancel the handoff"); return }
+    diagnosticPreparationBusy = true
+    val session = ++captureSession
+    val accepted = SeatDiagnosticTransfer.prepareAsync(this) { prepared ->
+      diagnosticPreparationBusy = false
+      if (isFinishing || isDestroyed || captureSession != session || !settings || !store.developerMode) {
+        runCatching { SeatDiagnosticTransfer.clear(this) }
+        return@prepareAsync
+      }
+      prepared.fold({ outgoing ->
+        runCatching { SeatDiagnosticTransfer.verifyLab(this); startActivity(outgoing) }
+          .onFailure { runCatching { SeatDiagnosticTransfer.clear(this) }; toast(it.message ?: "Diagnostic transfer failed") }
+      }, { toast(it.message ?: "Could not prepare private diagnostics") })
+    }
+    if (!accepted) {
+      diagnosticPreparationBusy = false
+      toast("A diagnostic export is already preparing. Keep this screen open and retry when it finishes.")
+    }
+  }
+
   private fun copyText(label:String,value:String) {
     val clipboard=getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
     clipboard.setPrimaryClip(android.content.ClipData.newPlainText(label,value));toast("Copied")

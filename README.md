@@ -39,11 +39,21 @@ Panel taps and opt-in child-lock doubles use the same recall controller as the a
 tool on supported devices. Sharing was removed because the car has no usable share targets.
 Presets and keys stay private on the device; exported preset backups contain personal data.
 
-Developer tools has **Set up vehicle readings**, **Inspect saved positions** and **View private report**.
+Developer tools has **Set up vehicle readings**, **Inspect saved positions**, **Native seat observation trial** and **View private report**. The [native A/B/A trial](docs/NATIVE-SEAT-OBSERVATION.md) records owner-operated native adjustments and method signatures; it never sends a seat command.
 The private report records capture attempts, persisted save readback, request origins, raw P/parking-brake
 checks, child-lock state changes and failure causes. It is capped at 128,000 characters and is separate
-from setup logs. Early pending memory cannot survive process death. Telegram transfer is not yet
-implemented; a separate ADB Lab integration handoff describes an explicit owner-approved log-only path.
+from setup logs. Early pending memory cannot survive process death. Developer tools also has **Trusted ADB Lab certificate** and **Send diagnostics to ADB Lab**.
+Set the trusted Lab signing certificate SHA-256 from your trusted build first. It is blank by default.
+The installed Lab certificate is checked on every transfer. The owner confirms private seat readings,
+preset IDs, timing and failures before a bounded JSON snapshot is passed to Lab. Lab shows another
+preview and confirmation before any Telegram upload. No preset backup or setup log is included. The log-only payload drops whole lines with sensitive identity/credential labels, VIN-shaped values, MAC addresses or key material, and reports the number omitted.
+This action uses a separate process-owned export worker, so a stalled OEM inspection cannot queue the export behind it. Only one preparation runs at a time, including across Activity recreation. Leaving Settings cancels the eventual handoff. This action does not read the vehicle or change movement settings. The separate credential-protected,
+non-exported diagnostic provider grants one read of one random snapshot, unlinks/revokes it after open,
+and rejects expired snapshots after five minutes when next accessed. Temporary copies are also removed
+when clearing the private report. Only live Seat Presets supports this transfer.
+Flush failures, buffer drops and export byte truncation are warnings, not successful complete captures.
+Earlier rotated history and pending memory lost on process death cannot be recovered.
+The filter does not recognize arbitrary unlabelled personal text in old free-form errors; review the private preview before sending.
 
 ## Development
 

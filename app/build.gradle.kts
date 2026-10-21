@@ -8,12 +8,13 @@ android {
     applicationId = "dev.lua.seatpreset"
     minSdk = 29
     targetSdk = 29
-    versionCode = providers.gradleProperty("seatVersionCode").orNull?.toInt() ?: 15
-    versionName = providers.gradleProperty("seatVersionName").orNull ?: "0.1.14"
+    versionCode = providers.gradleProperty("seatVersionCode").orNull?.toInt() ?: 16
+    versionName = providers.gradleProperty("seatVersionName").orNull ?: "0.1.15"
     testInstrumentationRunner = "android.test.InstrumentationTestRunner"
   }
   buildFeatures { buildConfig = true; compose = true }
   composeOptions { kotlinCompilerExtensionVersion = "1.5.8" }
+  testBuildType = providers.gradleProperty("seatTestBuildType").orNull ?: "debug"
   flavorDimensions += "vehicle"
   productFlavors {
     create("demo") {

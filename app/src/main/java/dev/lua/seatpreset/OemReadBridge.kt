@@ -51,6 +51,13 @@ internal class OemReadBridge(private val context: Context) {
     Startup.times.sampled(android.os.SystemClock.elapsedRealtime())
     return Position(values, "byd-setting-driver-1:" + java.security.MessageDigest.getInstance("SHA-256").digest((android.os.Build.FINGERPRINT + ":" + context.packageManager.getPackageInfo("com.byd.data.collect", 0).longVersionCode).toByteArray()).joinToString("") { "%02x".format(it) }.take(32), SeatObservation.FORMAT)
   }
+  /** Exact setting getters as raw diagnostic values, without fallback or preset conversion. */
+  fun percentageSeatCandidates(): Map<String, Double?> = mapOf(
+    "horizontal" to "getSeatHorization", "backrest" to "getSeatbackrestPostion", "height" to "getSeatTurnHeight"
+  ).mapValues { (_, method) ->
+    runCatching { number("setting", method, 1) }
+      .onFailure { SeatDiagnostics.event(context,"native-trial-read","getter=$method cause="+SeatDiagnostics.failure(it)) }.getOrNull()
+  }
   /** Separate raw geometry candidates. Never saved as percentage presets or passed to a writer. */
   fun absoluteSeatCandidates(): Map<String, Double?> {
     listOf("BODYWORK_COMMON","BODYWORK_GET").forEach { suffix ->
@@ -63,6 +70,17 @@ internal class OemReadBridge(private val context: Context) {
   }
   private val absoluteGetters=setOf("getDriverSeatHorizontalPosition","getDriverSeatBackrestPosition","getDriverSeatHeightPosition",
     "getDriverSeatSitpointPosition","getDriverSeatLegholderPosition","getDriverSeatHeadrestHorizontalPosition","getDriverSeatHeadrestVerticalPosition")
+  /** Metadata only. No candidate setter, constructor or SDK factory is invoked by this inventory. */
+  fun seatSignatures(): String = listOf("setting", "bodywork").joinToString("\n") { kind ->
+    val className = "android.hardware.bydauto.$kind.BYDAuto${if (kind == "setting") "Setting" else "Bodywork"}Device"
+    runCatching {
+      val cls = Class.forName(className, false, loader)
+      val methods = cls.methods.filter { it.name.contains("seat", ignoreCase = true) || it.name in setOf("get", "set") }
+        .map { "${it.declaringClass.name}.${it.name}(${it.parameterTypes.joinToString { type -> type.typeName }}):${it.returnType.typeName}" }.distinct().sorted()
+      "$className signatures=${methods.size}; metadata only, invocation/units/physical completion unverified\n" +
+        methods.take(100).joinToString("\n") + if (methods.size > 100) "\n[SIGNATURES CAPPED]" else ""
+    }.getOrElse { "$className inventory unavailable: ${SeatDiagnostics.failure(it)}" }
+  }
   fun children(): Pair<Int?, Int?> {
     fun read(area: Int) = runCatching { number("doorlock", "getDoorLockStatus", area).toInt().takeIf { it in 1..2 } }.getOrNull()
     return read(6) to read(7)

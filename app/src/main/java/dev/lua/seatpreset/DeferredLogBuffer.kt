@@ -6,6 +6,9 @@ class DeferredLogBuffer(private val maxLines: Int = 200, private val maxChars: I
   private var chars = 0
   private var dropped = 0
 
+  data class Status(val pendingLines: Int, val droppedLines: Int)
+  @Synchronized fun status() = Status(pending.size, dropped)
+
   @Synchronized
   fun clear() {
     pending.clear(); chars = 0; dropped = 0
