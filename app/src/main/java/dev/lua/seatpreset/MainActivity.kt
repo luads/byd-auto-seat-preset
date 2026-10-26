@@ -267,6 +267,7 @@ class MainActivity : ComponentActivity() {
       SettingsCommand.CHECK_UPDATES -> checkUpdates()
       SettingsCommand.INSTALL -> release?.let { latest->backgroundTask { SilentUpdater.install(this,latest);updateMessage="Update installed" } }
       SettingsCommand.INSTALLER -> release?.let { download(it) }
+      SettingsCommand.BACKREST_TEST -> startActivity(Intent(this,BackrestTestActivity::class.java))
       SettingsCommand.INSPECT -> inspectSavedPositions()
       SettingsCommand.SETUP_READS -> setupVehicleReadings()
       SettingsCommand.SEAT_TRIALS -> startActivity(Intent(this, SeatObservationTrialActivity::class.java))

@@ -34,23 +34,30 @@ internal class OemReadBridge(private val context: Context) {
     val value = if (area == null) method.invoke(obj) else method.invoke(obj, area)
     (value as? Number)?.toDouble()?.takeIf { it.isFinite() } ?: error("Getter is unavailable")
   }
-  fun seat(): Position {
-    val typedHorizontal=number("setting","getSeatHorization",1)
-    val fallback=if(typedHorizontal==0.0) runCatching {
-      val key=PresetChannel.key(context,firstUse=false) ?: return@runCatching null
-      dadb.Dadb.create("127.0.0.1",5555,key,connectTimeout=400,socketTimeout=1500).use { channel ->
-        val result=channel.shell(SeatPropertyRead.COMMAND)
-        if(result.exitCode==0) SeatPropertyRead.parse(result.output) else null
+  fun horizontalProperty(): Pair<Double, CoordinateEvidence>? = runCatching {
+    val key=PresetChannel.key(context,firstUse=false) ?: return@runCatching null
+    dadb.Dadb.create("127.0.0.1",5555,key,connectTimeout=400,socketTimeout=1500).use { channel ->
+      val result=channel.shell(SeatPropertyRead.COMMAND)
+      if(result.exitCode!=0) return@use null
+      SeatPropertyRead.parse(result.output)?.let {
+        it.percent to CoordinateEvidence("car-service.0x21603b80",android.os.SystemClock.elapsedRealtime(),it.cacheAtNs)
       }
-    }.getOrNull() else null
-    if(fallback!=null) PrivateDiagnostics.record(context,"fore/aft property observation cacheAtNs=${fallback.cacheAtNs} sampledAtMs=${android.os.SystemClock.elapsedRealtime()}")
-    val values = linkedMapOf("horizontal" to (fallback?.percent ?: typedHorizontal),
-      "backrest" to number("setting", "getSeatbackrestPostion", 1), "height" to number("setting", "getSeatTurnHeight", 1))
-    PrivateDiagnostics.record(context, "raw seat getter returns at=${android.os.SystemClock.elapsedRealtime()} driverArea=1 values=$values")
+    }
+  }.onFailure { SeatDiagnostics.event(context,"property-read","unavailable="+SeatDiagnostics.failure(it)) }.getOrNull()
+  fun seat(): Position {
+    val values=linkedMapOf<String,Double>()
+    val evidence=linkedMapOf<String,CoordinateEvidence>()
+    mapOf("horizontal" to "getSeatHorization","backrest" to "getSeatbackrestPostion","height" to "getSeatTurnHeight").forEach { (axis,method) ->
+      values[axis]=number("setting",method,1)
+      evidence[axis]=CoordinateEvidence("setting.$method",android.os.SystemClock.elapsedRealtime())
+    }
+    if(values["horizontal"]==0.0) horizontalProperty()?.let { (raw, provenance) -> values["horizontal"]=raw;evidence["horizontal"]=provenance }
     check(SeatObservation.usable(values)) { "Seat readings are unavailable or outside the candidate range" }
     Startup.times.sampled(android.os.SystemClock.elapsedRealtime())
-    return Position(values, "byd-setting-driver-1:" + java.security.MessageDigest.getInstance("SHA-256").digest((android.os.Build.FINGERPRINT + ":" + context.packageManager.getPackageInfo("com.byd.data.collect", 0).longVersionCode).toByteArray()).joinToString("") { "%02x".format(it) }.take(32), SeatObservation.FORMAT)
+    return Position(values, "byd-setting-driver-1:" + java.security.MessageDigest.getInstance("SHA-256").digest((android.os.Build.FINGERPRINT + ":" + context.packageManager.getPackageInfo("com.byd.data.collect", 0).longVersionCode).toByteArray()).joinToString("") { "%02x".format(it) }.take(32), SeatObservation.FORMAT,evidence)
+      .also { SeatDiagnostics.event(context,"seat-read",SeatDiagnostics.position("observed",it)) }
   }
+  fun backrest(): Double = number("setting","getSeatbackrestPostion",1)
   /** Exact setting getters as raw diagnostic values, without fallback or preset conversion. */
   fun percentageSeatCandidates(): Map<String, Double?> = mapOf(
     "horizontal" to "getSeatHorization", "backrest" to "getSeatbackrestPostion", "height" to "getSeatTurnHeight"
@@ -99,6 +106,22 @@ internal class OemReadBridge(private val context: Context) {
     val raw = rawPark()
     // This checks reported state only, not cache freshness. Physical confirmation is still required.
     return GearModeRead.parked(raw.first, raw.second)
+  }
+  /** User-requested diagnostic exception. Exactly one backrest command, never a full recall. */
+  fun sendBackrestTest(permit:BackrestTestPermit,foreground:()->Boolean,markAttempt:()->Unit) {
+    StorageAccess.requireUnlocked(context)
+    val obj=device("setting")
+    val method=obj.javaClass.getMethod("turnSeatbackrestPercent",Int::class.javaPrimitiveType,Int::class.javaPrimitiveType)
+    check(method.returnType==Void.TYPE) { "Backrest setter signature changed" }
+    check(context.checkSelfPermission("android.permission.BYDAUTO_SETTING_SET")==android.content.pm.PackageManager.PERMISSION_GRANTED) { "Missing seat-write permission" }
+    val observed=backrest()
+    val park=rawPark()
+    val awake=(context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isInteractive
+    val state=VehicleSnapshot(if(park.first==1) Gear.P else null,if(park.second==3) true else null,null,android.os.SystemClock.elapsedRealtime())
+    // No disk I/O or another queued action between the final guard and this single invocation.
+    val target=permit.consume(android.os.SystemClock.elapsedRealtime(),observed,state,foreground() && awake,SeatControl.enabled(context))
+    markAttempt() // Memory flag only. The caller must not do I/O here.
+    method.invoke(obj,1,target)
   }
   fun bindAxisWriter(axis: String): (Int) -> Unit {
     check(SeatWritePolicy.allowed()) { SeatWritePolicy.BLOCK_REASON }

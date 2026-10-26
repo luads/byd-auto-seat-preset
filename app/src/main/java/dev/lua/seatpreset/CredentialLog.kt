@@ -83,8 +83,13 @@ internal object PrivateDiagnostics {
   private val log = CredentialLog("private-observations.log")
   fun record(context: Context, event: String) = log.append(context, event)
   fun flush(context: Context) = log.flush(context)
-  fun clear(context: Context) { log.clear(context); SeatDiagnosticTransfer.clear(context) }
-  fun exportSnapshot(context: Context) = log.snapshot(context)
+  fun clear(context: Context) { log.clear(context); SeatSignatureInventory.clear(context); SeatDiagnosticTransfer.clear(context) }
+  fun exportSnapshot(context: Context):CredentialLog.Snapshot {
+    val main=log.snapshot(context)
+    val (inventory,warnings)=SeatSignatureInventory.snapshot(context)
+    // Inventory comes first so a byte cap drops metadata before the more recent trial history.
+    return CredentialLog.Snapshot((if(inventory.isBlank()) "" else "SDK inventory (metadata only)\n$inventory\n\nTrial history\n")+main.log,main.warnings+warnings)
+  }
   fun report(context: Context): String {
     StorageAccess.requireUnlocked(context); log.flush(context)
     val file = File(context.filesDir, "private-observations.log")

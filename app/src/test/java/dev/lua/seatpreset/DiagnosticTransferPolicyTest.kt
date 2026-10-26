@@ -5,6 +5,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DiagnosticTransferPolicyTest {
+  @Test fun structuredCandidatePlansSurvivePrivacyFilteringWithoutWeakeningNameProtection() {
+    val plan=SeatDiagnostics.plan(listOf(ManualSeatRecall.Axis("backrest",50,51)))
+    val result=DiagnosticTransferPolicy.redact("candidatePlan=$plan noCommand=true\nname=Private driver")
+    assertTrue(result.log.contains("axis=backrest from=50 target=51"))
+    assertFalse(result.log.contains("Private driver"))
+    assertEquals(1,result.warnings.size)
+  }
+
   @Test fun privacyFilterOmitsSecretsAndIdentityButKeepsSeatEvidence() {
     val vinShape = "A".repeat(8) + "1".repeat(9)
     val log = """2026-10-22 presetId=a-1 raw={1=12,2=40}

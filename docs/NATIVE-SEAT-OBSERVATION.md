@@ -10,6 +10,8 @@ Each phase records the exact named percentage getter values (without substitutin
 
 Trials last at most ten minutes and stay in memory. Leaving during a read invalidates that read. Process death starts a new trial; opening the app never resumes a read or movement. No wake lock, background sampler or vehicle write is added. Existing movement and writer-binding blocks remain in force. Permission setup remains a separate explicit action.
 
-There is no justified alternate actuating trial yet. On this owner's reviewed firmware, generic bodywork float data can become integer zero and named bodywork setters reach the failed integer property route. A new movement button requires a separately reviewed payload/units/stop contract for this exact firmware.
+This screen remains read-only. The separately requested BACKREST-TEST.md experiment is an explicit owner-confirmed exception and does not validate the normal recall contract. On this owner's reviewed firmware, generic bodywork float data can become integer zero and named bodywork setters reach the failed integer property route. Validated preset loading requires a separately reviewed payload/units/stop contract for this exact firmware.
 
 A 20-second UI deadline and Cancel read discard acceptance without interrupting OEM code. One process-wide worker permits only one outstanding read, including after this screen is reopened. A stuck getter cannot create additional worker threads or queue more reads. Wait for it to return or restart the app. Neither timeout nor cancellation sends a vehicle command.
+
+Missing read permissions are visible before each phase, with an explicit setup action. Percentage and cached fore/aft routes are separate; cached routes retain sample/cache timestamps with unverified clock/freshness. SDK signatures are stored separately once per firmware/SDK revision, rather than repeated in each trial.

@@ -1,5 +1,11 @@
 # Pre-alpha validation
 
+## 0.1.16, 2026-10-26
+
+134 JVM tests passed in each demo/live debug/release variant. Debug/release lint and signed builds passed. Tests cover one-shot backrest permits, expiry, changed readings, parked-state vetoes, coordinate provenance persistence and privacy-filter-safe candidate plans. The backrest experiment is an explicit foreground owner-controlled exception to the normal recall hold. Its numeric units and physical travel remain unverified. See BACKREST-TEST.md.
+
+Eight Android integration cases passed on the emulator, including deduplicated inventory, failed-revision retry, locked access, deferred clear and truncated inventory recovery. UI checks passed acknowledgement gating, cancel, one simulated dispatch with target/cross-axis logs, no observation replay, background invalidation and read-permission setup/cancel. No car command was sent. Screenshots remain local.
+
 ## 0.1.14, 2026-10-21
 
 105 JVM tests passed in each of demo/live debug/release, with zero failures or errors. All four lint variants have zero errors. Both debug and signed release APKs build. The live release signing certificate matches the established public key.

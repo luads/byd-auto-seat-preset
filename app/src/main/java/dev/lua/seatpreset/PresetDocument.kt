@@ -16,6 +16,9 @@ object PresetCodec {
       require(p.capturedAtMs == null || p.capturedAtMs >= 0) { "Invalid capture time" }
       p.position?.let { pos ->
         require(pos.source.isNotBlank() && pos.source.length <= 80 && pos.coordinateFormat.isNotBlank() && pos.coordinateFormat.length <= 80) { "Missing position format" }
+        require(pos.evidence.keys.all { it in pos.coordinates } && pos.evidence.values.all {
+          it.route.matches(Regex("[A-Za-z0-9_.:-]{1,100}")) && it.sampledAtMs >= 0 && (it.cacheAtNs == null || it.cacheAtNs > 0)
+        }) { "Invalid coordinate evidence" }
         require(pos.coordinates.size in 1..16 && pos.coordinates.all { (key, value) -> key.matches(Regex("[A-Za-z0-9_.:-]{1,64}")) && value.isFinite() }) { "Invalid position coordinates" }
       }
       require(p.position != null || p.capturedAtMs == null) { "Capture time without position" }
@@ -24,7 +27,11 @@ object PresetCodec {
   }
   fun array(presets: List<Preset>): JSONArray = JSONArray().apply {
     presets.forEach { p -> put(JSONObject().put("id", p.id).put("name", p.name).apply {
-      p.position?.let { pos -> put("position", JSONObject().put("source", pos.source).put("format", pos.coordinateFormat).put("coordinates", JSONObject(pos.coordinates))) }
+      p.position?.let { pos -> put("position", JSONObject().put("source", pos.source).put("format", pos.coordinateFormat).put("coordinates", JSONObject(pos.coordinates)).apply {
+        if(pos.evidence.isNotEmpty()) put("evidence", JSONObject().apply { pos.evidence.forEach { (axis, value) ->
+          put(axis, JSONObject().put("route",value.route).put("sampledAtMs",value.sampledAtMs).apply { value.cacheAtNs?.let { put("cacheAtNs",it) } })
+        } })
+      }) }
       p.capturedAtMs?.let { put("capturedAtMs", it) }
     }) }
   }
@@ -39,7 +46,12 @@ object PresetCodec {
       val coords = pos.getJSONObject("coordinates")
       Position(coords.keys().asSequence().associateWith { key ->
         val value = coords.get(key); require(value is Number) { "Coordinates must be numbers" }; value.toDouble()
-      }, string(pos, "source"), string(pos, "format"))
+      }, string(pos, "source"), string(pos, "format"), if(!pos.has("evidence")) emptyMap() else pos.getJSONObject("evidence").let { evidence ->
+        evidence.keys().asSequence().associateWith { axis -> evidence.getJSONObject(axis).let { item ->
+          fun integer(key:String):Long = item.get(key).let { require(it is Int || it is Long) { "Evidence times must be integers" }; (it as Number).toLong() }
+          CoordinateEvidence(string(item,"route"),integer("sampledAtMs"),if(item.has("cacheAtNs")) integer("cacheAtNs") else null)
+        } }
+      })
     }
     val at = if (p.has("capturedAtMs")) p.get("capturedAtMs").let { value -> require(value is Long || value is Int) { "Capture time must be an integer" }; (value as Number).toLong() } else null
     Preset(string(p, "id"), string(p, "name"), position, at)

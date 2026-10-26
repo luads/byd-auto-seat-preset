@@ -9,7 +9,9 @@ internal object SeatDiagnostics {
     PrivateDiagnostics.record(context, "trace=$trace " + detail.replace('\n', ' ').replace('\r', ' ').take(4096))
   }
   fun position(stage: String, value: Position?): String = if (value == null) "$stage unavailable" else
-    "$stage source=${value.source} format=${value.coordinateFormat} raw=${value.coordinates.toSortedMap()} units=unverified"
+    "$stage source=${value.source} format=${value.coordinateFormat} raw=${value.coordinates.toSortedMap()} units=unverified " +
+      "evidence="+value.coordinates.keys.sorted().joinToString("; ") { axis -> "$axis:[${value.evidence[axis]?.describe() ?: "route=legacy-unknown freshness=unverified"}]" }
+  fun plan(axes: List<ManualSeatRecall.Axis>): String = axes.joinToString("; ",prefix="[",postfix="]") { "axis=${it.name} from=${it.from} target=${it.to}" }
   fun failure(error: Throwable): String = generateSequence(error) { it.cause }.take(6)
     .joinToString(" <- ") { "${it.javaClass.simpleName}:${it.message.orEmpty().replace('\n', ' ').replace('\r', ' ').take(160)}" }
   fun inspect(context: Context): String {
@@ -32,7 +34,7 @@ internal object SeatDiagnostics {
       add(position("observed", current))
       store.all().filter { it.position != null }.forEach { preset ->
         runCatching { ManualSeatRecall.plan(current, checkNotNull(preset.position)) }
-          .fold({ add("presetId=${preset.id} candidatePlan=$it noCommand=true") },
+          .fold({ add("presetId=${preset.id} candidatePlan=${plan(it)} noCommand=true") },
             { add("presetId=${preset.id} planRejected=${failure(it)}") })
       }
     }.onFailure { add("readFailed=${failure(it)}") }

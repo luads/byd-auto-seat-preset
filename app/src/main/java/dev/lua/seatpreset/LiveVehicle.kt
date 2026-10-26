@@ -30,7 +30,7 @@ internal class LiveVehicle(private val context: Context,private val selectedAxes
     SeatDiagnostics.event(context,trace,SeatDiagnostics.position("before",current))
     val started=requestedAt
     val plan=ManualSeatRecall.plan(current,position).filter { it.from!=it.to && (selectedAxes==null || it.name in selectedAxes) }
-    SeatDiagnostics.event(context,trace,"candidatePlan=$plan")
+    SeatDiagnostics.event(context,trace,"candidatePlan=${SeatDiagnostics.plan(plan)}")
     if (!SeatWritePolicy.allowed()) {
       resultMessage=SeatWritePolicy.BLOCK_REASON
       SeatDiagnostics.event(context,trace,"writeBlocked reason=${SeatWritePolicy.BLOCK_REASON} dispatched=0")

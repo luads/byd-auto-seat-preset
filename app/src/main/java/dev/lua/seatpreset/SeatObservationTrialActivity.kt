@@ -23,6 +23,8 @@ class SeatObservationTrialActivity : Activity() {
   private var fresh = true
   private lateinit var bridge: OemReadBridge
   private lateinit var output: TextView
+  private lateinit var accessStatus:TextView
+  private lateinit var setupButton:Button
   private lateinit var readButton: Button
   private lateinit var cancelButton: Button
   override fun onCreate(state: Bundle?) {
@@ -57,6 +59,12 @@ class SeatObservationTrialActivity : Activity() {
       } }
     }
     page.addView(axes)
+    accessStatus=label("");page.addView(accessStatus)
+    setupButton=button("Set up missing read access") {
+      android.app.AlertDialog.Builder(this).setTitle("Set up vehicle readings?")
+        .setMessage("Grant this app missing read permissions through the local setup connection. Approve the Android prompt if shown. This does not grant seat-write access or move anything.")
+        .setNegativeButton("Cancel",null).setPositiveButton("Set up") { _,_-> setupReads() }.show()
+    };page.addView(setupButton)
     output = label("Ready for A. Reads and results go to the private report. Export that report after the trial.", 20f)
     page.addView(output)
     readButton = button("Read ${trial.stage()}") { read() }; page.addView(readButton)
@@ -83,6 +91,11 @@ class SeatObservationTrialActivity : Activity() {
     val values = linkedMapOf<String, Double?>()
     bridge.percentageSeatCandidates().forEach { (axis, value) -> values["setting.$axis"] = value }
     // Failure of this optional reader must leave the percentage evidence available.
+    bridge.horizontalProperty()?.let { (raw,evidence) ->
+      values["property.horizontal"]=raw
+      SeatDiagnostics.event(this,traceAtRead,"candidate axis=horizontal value=$raw ${evidence.describe()}")
+    }
+    if("property.horizontal" !in values) values["property.horizontal"]=null
     val absolute = runCatching { bridge.absoluteSeatCandidates() }.getOrElse {
       SeatDiagnostics.event(this, traceAtRead, "absolute unavailable cause=" + SeatDiagnostics.failure(it)); emptyMap()
     }
@@ -91,6 +104,7 @@ class SeatObservationTrialActivity : Activity() {
   }
   private fun read() {
     if (!active) return
+    showAccess()
     val request = readGuard.begin(SystemClock.elapsedRealtime())
     if (request == null) {
       output.text = "An earlier vehicle read is still running. No second read was started. Restart the app if it does not return."
@@ -113,7 +127,9 @@ class SeatObservationTrialActivity : Activity() {
       val result = runCatching {
         val began = SystemClock.elapsedRealtime()
         val before = requirePark()
-        if (inventory) bridge.seatSignatures().lineSequence().forEach { SeatDiagnostics.event(this, traceAtRead, "signature $it") }
+        if (inventory) runCatching { SeatSignatureInventory.ensure(this) { bridge.seatSignatures() } }
+          .fold({ SeatDiagnostics.event(this,traceAtRead,"inventoryKey=$it storedSeparately=true") },
+            { SeatDiagnostics.event(this,traceAtRead,"inventoryUnavailable="+SeatDiagnostics.failure(it)) })
         val first = candidates(traceAtRead); Thread.sleep(200); val second = candidates(traceAtRead)
         val after = requirePark(); val ended = SystemClock.elapsedRealtime()
         check(active && token == generation) { "Read discarded after screen, cancellation or trial change" }
@@ -150,6 +166,28 @@ class SeatObservationTrialActivity : Activity() {
       }
     }
   }
+  private fun showAccess() {
+    val missing=VehicleReadSetup.missing(this)
+    accessStatus.text=if(missing.isEmpty()) "Read permissions granted. OEM values and cache freshness still need verification."
+      else "Missing read access: "+missing.joinToString { it.substringAfter("BYDAUTO_") }+". Affected routes remain unavailable; available routes can still be observed."
+    setupButton.visibility=if(missing.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
+  }
+  private fun setupReads() {
+    val request=readGuard.begin(SystemClock.elapsedRealtime()) ?: return
+    ticket=request;readButton.isEnabled=false;setupButton.isEnabled=false
+    output.text="Setting up read permissions…"
+    worker.execute {
+      val result=runCatching { VehicleReadSetup.enable(this) }.getOrElse {
+        SeatDiagnostics.event(this,trace,"readSetupFailed="+SeatDiagnostics.failure(it))
+        "Setup did not finish. Check the local connection and retry."
+      }
+      readGuard.finish(request,SystemClock.elapsedRealtime())
+      runOnUiThread { if(!isFinishing) {
+        ticket=null;setupButton.isEnabled=true;showAccess();output.text=result
+        readButton.isEnabled=active && !trial.complete() && !readGuard.busy()
+      } }
+    }
+  }
   private fun cancelRead() {
     val request = ticket ?: return
     if (!readGuard.cancel(request)) return
@@ -159,6 +197,7 @@ class SeatObservationTrialActivity : Activity() {
   }
   override fun onResume() {
     super.onResume(); active = true
+    if(::accessStatus.isInitialized) showAccess()
     if (::readButton.isInitialized) readButton.isEnabled = !readGuard.busy() && !trial.complete()
     if (readGuard.busy() && ticket == null) output.text = "An earlier vehicle read is still running. Wait for it to return, or restart the app if it remains stuck. No second read was started."
   }

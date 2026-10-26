@@ -3,9 +3,9 @@
 Pre-alpha Android app for two favourite driving presets on BYD DiLink 5.
 Dark matte cards, editable driver names, preset backups and an optional home panel.
 
-**Diagnostic build: live seat writes are paused.** A parked recall produced unintended travel.
+**Normal preset loading is paused.** A parked recall produced unintended travel.
 The app can open and record positions, but card, panel, child-lock and editor requests cannot
-send seat commands. Existing presets remain observations with unverified units, not validated
+send seat commands. A separate owner-confirmed [backrest experiment](docs/BACKREST-TEST.md) can send exactly one ±1 numeric-unit command from Developer tools. Its physical travel is unverified, it has no verified stop command, and normal preset loading stays blocked. Existing presets remain observations with unverified units, not validated
 movement targets. Developer mode includes a private read-only saved-position inspection and an explicit vehicle-read permission setup, including the parking-brake factory permission.
 Nothing recalls a preset on startup or update. NFC identity remains unproven.
 New installs use generic Driver 1 and Driver 2 labels; names are local preferences.
@@ -40,6 +40,7 @@ tool on supported devices. Sharing was removed because the car has no usable sha
 Presets and keys stay private on the device; exported preset backups contain personal data.
 
 Developer tools has **Set up vehicle readings**, **Inspect saved positions**, **Native seat observation trial** and **View private report**. The [native A/B/A trial](docs/NATIVE-SEAT-OBSERVATION.md) records owner-operated native adjustments and method signatures; it never sends a seat command.
+New captures retain per-axis source and sample/cache timestamps; none establishes verified ECU freshness. Legacy coordinates are preserved. SDK signatures are kept in a separate bounded private inventory and included only in explicit diagnostic transfer.
 The private report records capture attempts, persisted save readback, request origins, raw P/parking-brake
 checks, child-lock state changes and failure causes. It is capped at 128,000 characters and is separate
 from setup logs. Early pending memory cannot survive process death. Developer tools also has **Trusted ADB Lab certificate** and **Send diagnostics to ADB Lab**.

@@ -8,8 +8,8 @@ android {
     applicationId = "dev.lua.seatpreset"
     minSdk = 29
     targetSdk = 29
-    versionCode = providers.gradleProperty("seatVersionCode").orNull?.toInt() ?: 16
-    versionName = providers.gradleProperty("seatVersionName").orNull ?: "0.1.15"
+    versionCode = providers.gradleProperty("seatVersionCode").orNull?.toInt() ?: 17
+    versionName = providers.gradleProperty("seatVersionName").orNull ?: "0.1.16"
     testInstrumentationRunner = "android.test.InstrumentationTestRunner"
   }
   buildFeatures { buildConfig = true; compose = true }

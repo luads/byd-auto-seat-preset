@@ -6,6 +6,9 @@ import dadb.Dadb
 
 /** Explicit foreground owner action. Does not enable recovery, child gestures or seat movement. */
 internal object VehicleReadSetup {
+  fun missing(context:Context):List<String> = VehicleReadPermissions.required.filter {
+    context.checkSelfPermission(it)!=PackageManager.PERMISSION_GRANTED
+  }
   fun enable(context: Context): String {
     StorageAccess.requireUnlocked(context)
     context.packageManager.getApplicationInfo("com.byd.data.collect", 0)
@@ -18,7 +21,7 @@ internal object VehicleReadSetup {
       Startup.adbAuthenticated = true
       missing.forEach { permission ->
         runCatching { adb.shell(VehicleReadPermissions.grantCommand(context.packageName, permission)) }
-          .fold({ SeatDiagnostics.event(context, "read-setup", "permission=$permission exit=${it.exitCode} granted=${granted(permission)}") },
+          .fold({ SeatDiagnostics.event(context, "read-setup", "permission=$permission exit=${it.exitCode} granted=${granted(permission)} detail=${it.output.replace('\n',' ').take(240)}") },
             { SeatDiagnostics.event(context, "read-setup", "permission=$permission cause=" + SeatDiagnostics.failure(it)) })
       }
     }

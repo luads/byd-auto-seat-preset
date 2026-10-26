@@ -1,6 +1,6 @@
 # Seat recall contract investigation
 
-Live writes are paused. A parked owner-triggered recall produced unintended travel. The retained private report includes the candidate axis targets before dispatch and later raw observations. It does not provide an acknowledgement or a time series proving which ECU operation caused each physical movement. Do not classify this as corrupted saved coordinates without comparing persisted data, command payload and independent readback.
+Normal preset writes are paused. The owner-requested, single-command backrest experiment is described in BACKREST-TEST.md; it does not establish a validated replacement writer. A parked owner-triggered recall produced unintended travel. The retained private report includes the candidate axis targets before dispatch and later raw observations. It does not provide an acknowledgement or a time series proving which ECU operation caused each physical movement. Do not classify this as corrupted saved coordinates without comparing persisted data, command payload and independent readback.
 
 ## OverDrive reference
 
@@ -29,4 +29,4 @@ The private credential-protected report records preset IDs, capture wall times, 
 
 Next, inspect the saved records and compare percentage and absolute candidate readings against small owner-operated native adjustments. Identify the native recall payload for this exact firmware before another setter test. Existing presets remain in their original unverified format. Do not convert them based only on matching ranges or repeated cached reads.
 
-The current candidate has a hard block in the shared live path and again at OEM writer binding/invocation. All card, panel, widget, child-lock and editor requests remain unable to write. Demo behavior is unchanged. Unflushed private memory logs cannot survive process death.
+The current candidate has a hard block in the shared live path and again at OEM writer binding/invocation. All card, panel, widget, child-lock and editor requests remain unable to write. The separate foreground backrest experiment uses an expiring, single-use permit, current reported P/EPB and an explicit owner confirmation for one numeric unit. It cannot call the full recall path or resume after restart. Demo behavior is unchanged. Unflushed private memory logs cannot survive process death.

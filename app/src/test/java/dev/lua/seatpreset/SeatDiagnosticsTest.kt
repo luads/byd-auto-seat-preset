@@ -10,7 +10,7 @@ class SeatDiagnosticsTest {
     assertTrue(text.contains("height=0.0"));assertTrue(text.contains("backrest=48.5"))
     assertTrue(text.contains("source=fixture"));assertTrue(text.contains("format=unknown-format"))
     assertTrue(text.contains("units=unverified"))
-    assertFalse(text.contains("percent"));assertFalse(text.contains("fresh"))
+    assertFalse(text.contains("percent"));assertFalse(text.contains("freshness=verified"))
   }
   @Test fun missingCoordinatesAreNotFabricatedAsZero() {
     assertEquals("saved unavailable",SeatDiagnostics.position("saved",null))

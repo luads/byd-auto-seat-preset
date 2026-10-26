@@ -2,7 +2,7 @@ package dev.lua.seatpreset
 
 enum class Gear { P, R, N, D }
 data class VehicleSnapshot(val gear: Gear?, val parkingBrake: Boolean?, val speedKph: Double?, val sampledAtMs: Long?)
-data class Position(val coordinates: Map<String, Double>, val source: String, val coordinateFormat: String)
+data class Position(val coordinates: Map<String, Double>, val source: String, val coordinateFormat: String, val evidence: Map<String, CoordinateEvidence> = emptyMap())
 data class Preset(val id: String, val name: String, val position: Position? = null, val capturedAtMs: Long? = null)
 data class RecallResult(val allowed: Boolean, val message: String)
 
