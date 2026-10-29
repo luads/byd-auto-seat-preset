@@ -1,7 +1,8 @@
 package dev.lua.seatpreset
 
-/** Physical recall produced unintended travel. Reopen only after the coordinate contract is verified. */
+/** Only the new typed-feedback native-signal loader is enabled. Absolute writers remain retired. */
 internal object SeatWritePolicy {
-  const val BLOCK_REASON = "Seat movement paused while saved coordinates are investigated"
-  fun allowed(): Boolean = false
+  const val BLOCK_REASON="Record a fresh position before using native feedback loading"
+  fun allowed():Boolean=true
+  fun absoluteAllowed():Boolean=false
 }

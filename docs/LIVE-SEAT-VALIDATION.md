@@ -1,6 +1,6 @@
 # Capture and recall validation plan
 
-Current status, 2026-10-21: an owner-triggered parked recall caused unintended travel. Version 0.1.14 blocks the failed live write path and removes the old trial screens. Read-only capture and inspection remain available. See SEAT-RECALL-CONTRACT.md for the evidence and remaining command-contract work. FIELD-TRIALS.md is historical and does not describe a runnable movement procedure in this release.
+Current status: 0.1.18 enables the owner-requested native-signal feedback loader, with explicit movement opt-in and reported P/EPB checks. The old percentage route remains retired. One driver-backrest forward/release pulse has physical confirmation; complete loading, reverse and other axes remain experimental. Independent captures need the new typed format. Mirror feedback can be recorded and compared read-only; no mirror movement is sent. See SEAT-RECALL-CONTRACT.md and BACKREST-TEST.md.
 
 The emulator checks storage and controller behavior. It cannot prove that an OEM getter reports actual coordinates, that a setter affects the intended seat, or that a real movement stops safely.
 
@@ -14,7 +14,7 @@ Validate gear and parking-brake sources, event delivery and sample timestamps se
 
 Use the owner-operated car, parked in P, with the agreed parking-brake evidence and clear space around the seat. Explicitly agree the test position and validated control path before writing. Start with one known, small change and read back the result. Check refusal outside eligibility, interruption/cancellation and partial failures before enabling a full preset. Determine whether read-back proves command acceptance or actual completion; do not label a moving seat as successfully recalled merely because a setter returns success.
 
-Capture must save source, coordinate format and capture time with the position. Confirm replacement only on the selected driver's preset. Recall must reject incompatible metadata, non-finite or unsupported coordinates, unknown/stale eligibility and an unvalidated adapter. Validated automatic app/panel recalls must use that same controller. Current app, panel and child-lock requests share the controller, and the live write hold cannot be overridden by the movement preference. Startup, widget creation, resizing, rename, update and return to P must never move the seat.
+Capture must save source, coordinate format and capture time with the position. Confirm replacement only on the selected driver's preset. Recall must reject incompatible metadata, non-finite or unsupported coordinates, unknown/stale eligibility and an unvalidated adapter. Validated automatic app/panel recalls must use that same controller. Current app, panel and child-lock requests share the controller, with native feedback loading enabled behind the movement preference; retired absolute writers remain blocked. Startup, widget creation, resizing, rename, update and return to P must never move the seat.
 
 ## Release gates
 

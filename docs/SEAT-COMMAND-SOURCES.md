@@ -8,4 +8,4 @@ Reviewed 2026-10-29. Source inspection does not validate this car's setter contr
 
 The former named backrest setter and bodywork aliases are not independent routes. Earlier owner firmware review found integer-property dispatch and a generic compatibility manager that can convert float payloads to integer zero. Collector writes and known AbsTsMyCar backends stay quarantined. Native MyCar system SDK compatibility must be established independently by the app's read-only checks. Unknown geometry or inaccessible backend inspection must fail closed.
 
-Fresh sampling time is not proof of fresh ECU data. Old percentage observations and saved preset coordinates are not converted into geometry targets. Normal loading stays paused.
+Fresh sampling time is not proof of fresh ECU data. Old percentage observations and saved preset coordinates are not converted into geometry targets. Version 0.1.18 uses a separate native-signal feedback loader. It does not revive the rejected float or percentage paths; see NATIVE-SIGNAL-FINDINGS.md.

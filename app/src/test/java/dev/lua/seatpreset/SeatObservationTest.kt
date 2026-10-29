@@ -19,6 +19,6 @@ class SeatObservationTest {
     }
     assertFalse(RecallController(vehicle){100}.recall(doc.presets.first()).allowed); assertFalse(applied)
   }
-  @Test fun planNamesExactDriverSetterCandidatesButDoesNotExecute() { val plan=SeatObservation.plan(position(),position()); assertTrue(plan.contains("turnSeatHorizationPercent")); assertTrue(plan.contains("turnSeatbackrestPercent"));assertTrue(plan.contains("driver area 1")) }
+  @Test fun planNamesNativeSignalsWithoutRevivingPercentageSetters() { val plan=SeatObservation.plan(position(),position()); assertTrue(plan.contains("native horizontal signals")); assertTrue(plan.contains("native backrest signals"));assertFalse(plan.contains("Percent"));assertTrue(plan.contains("driver area 1")) }
   @Test fun incompatibleTargetCannotProduceAPlan() { assertTrue(runCatching { SeatObservation.plan(position(),position().copy(source="other")) }.isFailure) }
 }

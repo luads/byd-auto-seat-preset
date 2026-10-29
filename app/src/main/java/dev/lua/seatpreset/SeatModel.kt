@@ -43,7 +43,7 @@ class RecallController(private val vehicle: VehicleAdapter, private val clock: (
     return try {
       if (!vehicle.apply(position)) RecallResult(false, vehicle.resultMessage ?: "Recall could not be verified")
       else RecallResult(true, vehicle.resultMessage ?: "${preset.name}: preset recalled")
-    } catch (error: Exception) { runCatching { vehicle.failed(error) }; RecallResult(false, "Recall failed") }
+    } catch (error: Exception) { runCatching { vehicle.failed(error) }; RecallResult(false, vehicle.resultMessage ?: "Recall failed") }
   }
 }
 

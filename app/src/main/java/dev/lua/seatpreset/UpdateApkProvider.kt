@@ -19,6 +19,7 @@ class UpdateApkProvider : ContentProvider() {
   override fun getType(uri: Uri): String { file(uri); return "application/vnd.android.package-archive" }
   override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
     require(mode == "r")
+    check(!Vehicle.moving()) { "Seat loading is active" }
     return ParcelFileDescriptor.open(file(uri), ParcelFileDescriptor.MODE_READ_ONLY)
   }
   override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor {

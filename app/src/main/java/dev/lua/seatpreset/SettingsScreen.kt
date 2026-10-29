@@ -168,7 +168,7 @@ internal fun SeatSettingsScreen(state:SettingsUiState,onAction:(SettingsAction)-
     ToggleRow("Allow seat movement",state.movementEnabled) { enabled ->
       val change=SettingsAction.Toggle(SettingsToggle.MOVEMENT,enabled)
       if(!enabled) action(change) else confirm(change,"Allow seat movement?",
-        if(state.movementPaused) "Save permission for owner-triggered parked tests. The previous command path remains blocked while its replacement is verified. This switch does not move the seat."
+        if(state.movementPaused) "Enable owner-triggered native seat signals in P with the parking brake confirmed. This switch does not move the seat."
         else "Allow owner-triggered preset loading in P with the parking brake applied. Keep native controls within reach. Enabling this switch does not move the seat.","Enable")
     }
     if(state.movementPaused) Text("The previous command path is blocked. Your choice is saved.",fontSize=15.sp,color=Color(0xFFE5B765),lineHeight=21.sp)
@@ -253,9 +253,8 @@ internal fun SeatSettingsScreen(state:SettingsUiState,onAction:(SettingsAction)-
 @Composable private fun DiagnosticsCard(state:SettingsUiState,action:(SettingsAction)->Unit,confirm:(SettingsAction,String,String,String)->Unit) {
   fun send(command:SettingsCommand) { action(SettingsAction.Command(command)) }
   Section("Diagnostics") {
-    TonalAction(if(state.demo) "Seat experiments · simulation" else "Seat command experiments",Modifier.fillMaxWidth()) { send(SettingsCommand.BACKREST_TEST) }
+    TonalAction(if(state.demo) "Seat trials · simulation" else "Seat trials",Modifier.fillMaxWidth()) { send(SettingsCommand.BACKREST_TEST) }
     if(!state.demo) TonalAction("Inspect saved positions",Modifier.fillMaxWidth()) { send(SettingsCommand.INSPECT) }
-    TonalAction("Native seat observation trial",Modifier.fillMaxWidth()) { send(SettingsCommand.SEAT_TRIALS) }
     if (!state.demo) {
     TonalAction("Trusted ADB Lab certificate",Modifier.fillMaxWidth()) { send(SettingsCommand.TRUST_LAB) }
     TonalAction("Send diagnostics to ADB Lab",Modifier.fillMaxWidth()) { confirm(SettingsAction.Command(SettingsCommand.SEND_DIAGNOSTICS),"Prepare private diagnostics?","This transfers private seat readings, preset IDs, timing and failures to the trusted ADB Lab. It excludes preset backups and setup credentials. ADB Lab asks again before any Telegram send. No seat operation.","Prepare diagnostics") }

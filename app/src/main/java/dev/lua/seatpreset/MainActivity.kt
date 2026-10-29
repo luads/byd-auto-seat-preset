@@ -67,6 +67,8 @@ class MainActivity : ComponentActivity() {
     super.onSaveInstanceState(outState)
   }
   override fun onResume() { super.onResume(); HomeVisibilityService.instance?.hide(); Startup.retry(this); if (::store.isInitialized) safeRender() }
+  override fun onWindowFocusChanged(hasFocus:Boolean) { super.onWindowFocusChanged(hasFocus);SeatMotionState.mainVisible=hasFocus }
+  override fun onPause() { SeatMotionState.mainVisible=false;Vehicle.cancel();super.onPause() }
   override fun onStop() { captureSession++; super.onStop() }
   override fun onDestroy() { runCatching { unregisterReceiver(unlockedReceiver) }; worker.shutdownNow(); super.onDestroy() }
 
@@ -104,6 +106,7 @@ class MainActivity : ComponentActivity() {
     val block = if (BuildConfig.DEMO) RecallPolicy.blockReason(vehicle.snapshot(), android.os.SystemClock.elapsedRealtime()) else if(!SeatWritePolicy.allowed()) SeatWritePolicy.BLOCK_REASON else if(SeatControl.enabled(this)) "Hold to save. Tap to load in P." else "Seat movement is off. Enable it in Settings."
     page.addView(text(block ?: "P · parking brake confirmed", 16f, if (block == null) getColor(R.color.matte_ready) else getColor(R.color.matte_caution)))
     val wide = resources.configuration.screenWidthDp >= 600
+    if(!BuildConfig.DEMO && Vehicle.moving()) page.addView(action("Stop seat load") { Vehicle.cancel();toast("Stop requested. Keep native controls ready.");render() })
     val favourites = store.favourites()
     (favourites + store.all().filter { p -> favourites.none { it.id == p.id } }).chunked(if (wide) 2 else 1).forEach { pair ->
       val cards = LinearLayout(this).apply { orientation = if (wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL }
@@ -120,7 +123,7 @@ class MainActivity : ComponentActivity() {
             runCatching {
               if (!saved) toast("Hold this card to save the current position")
               else if (BuildConfig.DEMO) { toast(Vehicle.recall(this@MainActivity, preset).message); render() }
-              else Vehicle.requestRecall(this@MainActivity,preset) { result -> if(!isDestroyed) { toast(result.message);render() } }
+              else { Vehicle.requestRecall(this@MainActivity,preset) { result -> if(!isDestroyed) { toast(result.message);render() } };render() }
             }.onFailure { toast(it.message ?: "Action failed") }
           }
         }
@@ -412,7 +415,7 @@ class MainActivity : ComponentActivity() {
   private fun captureLive(preset: Preset) {
     if (captureBusy) return
     AlertDialog.Builder(this).setTitle("Save current position for ${preset.name}?")
-      .setMessage(if (preset.position == null) "Park in P. This saves the current driver's seat position." else "Park in P. Replace the saved position with the current one?")
+      .setMessage(if (preset.position == null) "Park in P. Saves independent seat coordinates and available mirror readings. Mirror movement is not enabled." else "Park in P. Replace this independent seat position and available mirror readings?")
       .setNegativeButton("Cancel", null).setPositiveButton("Save") { _, _ ->
         captureBusy = true; val session = captureSession
         toast("Saving position…")
@@ -482,6 +485,7 @@ class MainActivity : ComponentActivity() {
           toast("Allow installs from Seat Presets, then tap Download again")
           startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
         } else {
+          check(!Vehicle.moving()) { "Wait for seat loading to stop before installing an update" }
           startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://$packageName.updates/apk"), "application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
         }
       }.onFailure { updateMessage = "Android installer unavailable: ${it.javaClass.simpleName}"; render() }

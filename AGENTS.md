@@ -2,7 +2,7 @@
 
 Read README.md before editing. This repository is the new preset app, not the private ADB lab.
 
-- Keep demo and live package IDs separate. Live vehicle readings remain null and actuation stays disabled until a local control contract is validated.
+- Keep demo and live package IDs separate. The owner authorized experimental independent seat loading through the typed-feedback/native-signal contract in docs/SEAT-RECALL-CONTRACT.md. Keep the movement opt-in and interlocks. Absolute percentage writers remain retired; mirror probes remain read-only. One backrest forward/release has physical confirmation, not a complete multi-axis contract.
 - Both app and widget recalls use the same controller. Two distinct favourites must remain directly tappable.
 - Require fresh P and parking-brake evidence for recall. Speed is a veto, never proof of stillness. These are proposed conditions, not a validated physical interlock.
 - Never persist or replay a movement request after restart, blocked eligibility, or an update.

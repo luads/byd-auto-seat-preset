@@ -1,5 +1,17 @@
 # Pre-alpha validation
 
+## 0.1.18, 2026-10-30
+
+167 JVM tests passed in each demo/live debug/release variant. All four lint variants have zero errors; existing warnings remain. Required debug builds and stable-signed release builds passed. The parser also accepted the private seven-axis capture from the owner car, without committing its values. Tests cover typed/status-bearing zero versus fallback/sentinel, ambiguous and wrong-type feedback, legacy rejection, bounded signals, release on failure, expired requests, cancellation/P/brake/opt-out loss, late reads, wrong direction, coupling, overshoot, explicit direction profiles, motion/update exclusion and the bounded private Lab envelope.
+
+Eight Android storage/startup/inventory cases passed on the Android 11 emulator. The actual demo trial UI passed acknowledgement gating, Cancel, one native simulated pulse/release, readback, intervention markers and rejection of intervened direction evidence, read-only mirrors, a six-pulse three-axis independent load, explicit owner direction confirmation, background invalidation and preference restoration. Wide screenshots were inspected and remain ignored/private. The harness rechecks observation visibility because its ten-second window may expire during a UI dump.
+
+Settings regression checks also passed rename/save readback, favourite swaps, both child mappings, movement opt-in persistence, confirmation cancellation, retained scroll, Settings Back, and 1920×1080/1440×1080 recreation without geometry changes. The narrow child section was checked after correcting an automation scroll oscillation; the app needed no layout fix. Original private emulator labels were restored after QA.
+
+The stable-signed, non-debuggable live app passed the actual trusted Lab one-use transfer test against a tokenless Lab build. Synthetic native-signal, release, feedback-frame and mirror-read records were present in the exported snapshot and imported privately by Lab. Wrong/missing trust, locked storage, shell/own-UID reads, malformed/oversize/wrong-MIME/path payloads and URI revocation were checked. No Telegram Send action or network delivery was tested.
+
+One earlier, explicitly owner-authorized driver-backrest forward command followed by release had physical confirmation: only the backrest moved briefly and stopped without physical intervention. This is not validation of a full preset load, reverse direction, other axes, every release failure or a guaranteed travel bound. No more car calls were made after the owner started driving. Native memory slots are not overwritten and mirrors remain read-only. Full independent loading, per-axis physical direction/stop, mirror-only attribution and overnight behavior still require owner-operated car checks. The public build enables real loading behind the owner movement toggle, as requested; startup/updates/readiness never load a preset.
+
 ## 0.1.17, 2026-10-29
 
 143 JVM tests passed in each demo/live debug/release variant. All four lint variants have zero errors; existing warnings remain. Debug and stable-signed release builds passed. New tests cover distinct single-axis/seat-batch float payloads, preserved axes, retired/collector/unknown-backend rejection, immutable permits, request expiry, opt-out, foreground and parked-state vetoes, one-use dispatch, separate write-permission setup and private-export formatting.

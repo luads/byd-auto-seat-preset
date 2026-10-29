@@ -80,6 +80,7 @@ internal class BodyworkExperimentBridge(private val context:Context,val source:S
     SeatExperiment.requireBackend(ancestry)
   }
   fun send(trace:String,permit:SeatExperimentPermit,park:()->VehicleSnapshot,foreground:()->Boolean,markAttempt:()->Unit):Int {
+    check(SeatWritePolicy.absoluteAllowed()) { "Generic float writes are retired. Use native feedback control." }
     requireWritableBackend()
     check(permit.source==source)
     val obj=device;val cls=eventClass

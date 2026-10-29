@@ -57,13 +57,16 @@ object Vehicle {
     if(!inFlight.compareAndSet(false,true)) { done(RecallResult(false,"A seat request is already running"));return }
     val app=context.applicationContext
     val requestedAt=SystemClock.elapsedRealtime()
+    val token=SeatMotionState.token()
     recallWorker.execute {
-      val result=try { recall(app,preset,axes,requestedAt,origin) } finally { inFlight.set(false) }
+      val result=try { recall(app,preset,axes,requestedAt,origin,token) } finally { inFlight.set(false) }
       android.os.Handler(android.os.Looper.getMainLooper()).post { done(result) }
     }
   }
+  fun moving()=inFlight.get() || SeatMotionState.operations.moving()
+  fun cancel()=SeatMotionState.cancel()
   fun adapter(context: Context): VehicleAdapter = if (BuildConfig.DEMO) DemoVehicle(context) else LiveVehicle(context)
-  fun recall(context: Context, preset: Preset,axes: Set<String>?=null,requestedAt: Long=SystemClock.elapsedRealtime(),origin: RecallOrigin=RecallOrigin.CARD): RecallResult {
+  fun recall(context: Context, preset: Preset,axes: Set<String>?=null,requestedAt: Long=SystemClock.elapsedRealtime(),origin: RecallOrigin=RecallOrigin.CARD,token:Long=SeatMotionState.token()): RecallResult {
     val trace=java.util.UUID.randomUUID().toString()
     if (!BuildConfig.DEMO) {
       SeatDiagnostics.event(context,trace,"request origin=$origin presetId=${preset.id} capturedAtWallMs=${preset.capturedAtMs} requestedAtMs=$requestedAt axes=${axes ?: "all"}")
@@ -74,7 +77,8 @@ object Vehicle {
       if (!BuildConfig.DEMO && !SeatControl.enabled(context)) return@runCatching RecallResult(false,"Enable Seat movement in Settings first")
       val store=PresetStore(context)
       val value=if(store.storageMessage()!=null) RecallResult(false,"Review preset storage in Settings before use")
-        else RecallController(if(BuildConfig.DEMO) adapter(context) else LiveVehicle(context,axes,requestedAt,trace),SystemClock::elapsedRealtime).recall(preset)
+        else if(!BuildConfig.DEMO && (preset.position?.let { PositionFeedback.accepts(it) }!=true)) RecallResult(false,"Hold the preset card to record it again with typed feedback")
+        else RecallController(if(BuildConfig.DEMO) adapter(context) else LiveVehicle(context,axes,requestedAt,trace,origin,token),SystemClock::elapsedRealtime).recall(preset)
       runCatching { store.result=value.message }
       runCatching { PresetWidget.refresh(context) }
       value

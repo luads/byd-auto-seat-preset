@@ -34,6 +34,12 @@ object FloatingPanelView {
       gravity = Gravity.CENTER; contentDescription = "Close floating panel"
       isClickable = true; setOnClickListener { close() }
     }, LinearLayout.LayoutParams(dp(48), dp(48)))
+    val stop=label("Stop",16f,R.color.matte_silver).apply {
+      tag="stop-seat-load";gravity=Gravity.CENTER;isClickable=true
+      visibility=if(!previewOnly && Vehicle.moving()) View.VISIBLE else View.GONE
+      setOnClickListener { Vehicle.cancel();text="Stopping…" }
+    }
+    header.addView(stop,LinearLayout.LayoutParams(dp(76),dp(48)))
     root.addView(header)
     val targets = LinearLayout(context)
     PresetStore(context).favourites().forEachIndexed { slot, preset ->
@@ -45,7 +51,7 @@ object FloatingPanelView {
         elevation = dp(1).toFloat()
         isClickable = true; isFocusable = true
         contentDescription = "Recall preset for ${preset.name}"
-        setOnClickListener { recall(preset.id) }
+        setOnClickListener { recall(preset.id);if(!previewOnly && Vehicle.moving()) stop.visibility=View.VISIBLE }
       }
       target.addView(ImageView(context).apply {
         setImageResource(R.drawable.seat_matte); scaleType = ImageView.ScaleType.FIT_CENTER

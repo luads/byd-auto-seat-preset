@@ -1,4 +1,4 @@
-> Current diagnostic builds block normal live preset loading. Separately confirmed one-shot experiments are described in [BACKREST-TEST.md](BACKREST-TEST.md). The old supervised movement and child-lock trial screens are removed. Use Developer tools > Inspect saved positions for read-only investigation. The historical procedure below is not runnable in this build. See [the recall contract investigation](SEAT-RECALL-CONTRACT.md) before any future actuation test.
+> Version 0.1.18 enables experimental independent-coordinate seat loading with native signals and typed feedback. See [BACKREST-TEST.md](BACKREST-TEST.md) and [SEAT-RECALL-CONTRACT.md](SEAT-RECALL-CONTRACT.md). Mirror movement is off. The older procedure below is historical.
 
 # Owner-operated saved presets, 0.1.12
 

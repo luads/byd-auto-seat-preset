@@ -48,8 +48,13 @@ internal class ChildShortcutMonitor(private val context: Context) {
           lastObserved=observed
         }
         val side=if(result?.third==true) recognizer.sample(ChildSample(at,result.first,result.second)) else { recognizer.reset();null }
-        if(side!=null && at-lastRequest>=1500) {
+        if(side!=null && (Vehicle.moving() || at-lastRequest>=1500)) {
           runCatching {
+            if(Vehicle.moving()) {
+              Vehicle.cancel();SeatDiagnostics.event(context,"child-input","ownerCancel side=$side sampledAtMs=$at")
+              android.widget.Toast.makeText(context,"Stopping seat load…",android.widget.Toast.LENGTH_SHORT).show()
+              return@runCatching
+            }
             val mapped=ChildBindings(context).preset(side)
             SeatDiagnostics.event(context,"child-input","recognizedSide=$side sampledAtMs=$at mappedId=${mapped?.id} saved=${mapped?.position!=null}")
             if(mapped?.position!=null && ChildBindings(context).enabled) {

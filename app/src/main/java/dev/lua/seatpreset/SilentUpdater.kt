@@ -69,10 +69,13 @@ internal object SilentUpdater {
       adb.push(apk, remote, 420, apk.lastModified() / 1000)
       try {
         if (requireOptIn) check(enabled(c)) { "Automatic updates are off" }
-        // Commit the marker before pm replaces and kills this process. It never stores an action.
-        check(prefs(c).edit().putLong("pending-version", release.versionCode).commit()) { "Cannot record pending update" }
-        val result = adb.shell("pm install -r $remote")
-        check(UpdatePolicy.installSucceeded(result.exitCode, result.allOutput)) { "Android did not confirm the update" }
+        check(SeatMotionState.operations.beginInstall()) { "Update deferred until the seat load or trial finishes" }
+        try {
+          // A seat signal cannot start while this process is being replaced.
+          check(prefs(c).edit().putLong("pending-version", release.versionCode).commit()) { "Cannot record pending update" }
+          val result = adb.shell("pm install -r $remote")
+          check(UpdatePolicy.installSucceeded(result.exitCode, result.allOutput)) { "Android did not confirm the update" }
+        } finally { SeatMotionState.operations.endInstall() }
       } finally { runCatching { adb.shell("rm -f $remote") } }
     }
   }

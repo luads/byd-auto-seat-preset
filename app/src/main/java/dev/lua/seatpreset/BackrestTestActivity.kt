@@ -11,233 +11,225 @@ import android.widget.*
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** One explicitly selected SDK/payload/command, followed by bounded read-only observation. */
+/** Structured optional native-signal trial. Production recalls use the same native signal bridge. */
 class BackrestTestActivity:Activity() {
   private val main=Handler(Looper.getMainLooper())
   @Volatile private var active=false
   @Volatile private var generation=0
-  @Volatile private var interventionAt=0L
-  private var method=SeatExperimentMethod.SINGLE
-  private var source=SeatSdkSource.NATIVE
-  private var baseline:Map<String,Double?>?=null
-  private var baselineAt=0L
-  private var trace="seat-experiment-"+java.util.UUID.randomUUID()
-  private lateinit var output:TextView
-  private lateinit var access:TextView
-  private lateinit var readButton:Button
-  private lateinit var setupButton:Button
-  private lateinit var minus:Button
-  private lateinit var plus:Button
-  private lateinit var end:Button
-  private lateinit var physical:Button
-  private lateinit var restored:Button
+  private var trace="native-trial-"+java.util.UUID.randomUUID()
+  private var selected="backrest"
   private var observingUntil=0L
   private var hasAttempt=false
-  private val selectionControls=mutableListOf<View>()
-  private var beforeCommand:Map<String,Double?> = emptyMap()
-  private var expectedTarget=Double.NaN
-  private val parkBridge by lazy { OemReadBridge(this) }
-  private fun experimentBridge()=bridges.getOrPut(source) { BodyworkExperimentBridge(applicationContext,source) }
+  private var manual=false
+  private var observed=false
+  private var pulseBefore:Map<String,PositionFeedback.Sample>?=null
+  private var pulseAfter:Map<String,PositionFeedback.Sample>?=null
+  private var pulseAxis="backrest"
+  private var pulseDirection=1
+  private lateinit var directionConfirm:Button
+  private lateinit var output:TextView
+  private val controls=mutableListOf<View>()
+  private lateinit var physical:Button
+  private lateinit var restored:Button
+  private lateinit var end:Button
+  private val parkBridge by lazy { OemReadBridge(applicationContext) }
   private fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
   override fun onCreate(state:Bundle?) {
     super.onCreate(state)
     if(!StorageAccess.unlocked(this)) { finish();return }
-    val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(dp(32),dp(20),dp(32),dp(24));setBackgroundColor(getColor(R.color.matte_canvas)) }
+    val page=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(dp(28),dp(20),dp(28),dp(28));setBackgroundColor(getColor(R.color.matte_canvas)) }
     fun text(value:String,size:Float=18f)=TextView(this).apply { text=value;textSize=size;setTextColor(getColor(R.color.matte_silver));setPadding(0,dp(8),0,dp(8)) }
-    fun button(value:String,action:()->Unit)=Button(this).apply {
-      text=value;isAllCaps=false;minHeight=dp(76);layoutParams=LinearLayout.LayoutParams(-1,-2).apply { topMargin=dp(8);bottomMargin=dp(4) };setOnClickListener { action() }
-    }
-    root.addView(text(if(BuildConfig.DEMO) "Seat experiments · simulation" else "Seat command experiments",28f))
-    root.addView(text("Choose one method and SDK, read compatibility, then confirm one ±1 numeric-unit backrest command. This does not guarantee small physical travel. Other axes may react. There is no verified app stop command. Keep native controls ready. Normal preset loading stays blocked."))
-    val methods=RadioGroup(this)
-    SeatExperimentMethod.values().forEach { item ->
-      methods.addView(RadioButton(this).apply {
-        selectionControls+=this
-        id=View.generateViewId();text=item.label;minHeight=dp(64);setTextColor(getColor(R.color.matte_silver));isChecked=item==method
-        setOnCheckedChangeListener { _,checked->if(checked && method!=item) { method=item;reset() } }
-      })
-    };root.addView(methods)
-    root.addView(text("SDK source. Changing it requires a new read; there is no automatic fallback."))
-    root.addView(Spinner(this).apply {
-      selectionControls+=this
-      adapter=ArrayAdapter(this@BackrestTestActivity,android.R.layout.simple_spinner_dropdown_item,SeatSdkSource.values().map { it.label })
+    fun button(value:String,block:()->Unit)=Button(this).apply { text=value;isAllCaps=false;minHeight=dp(64);layoutParams=LinearLayout.LayoutParams(-1,-2).apply { topMargin=dp(6);bottomMargin=dp(6) };setOnClickListener { block() } }
+    page.addView(text(if(BuildConfig.DEMO) "Seat trials · simulation" else "Seat trials",28f))
+    page.addView(text("Try one native 100 ms pulse, then check readback and physical stop. Keep native controls ready. Trials are optional; preset loading is enabled."))
+    val wide=resources.configuration.screenWidthDp>=900
+    val columns=LinearLayout(this).apply { orientation=if(wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL }
+    val actions=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }
+    val details=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }
+    if(wide) {
+      columns.addView(actions,LinearLayout.LayoutParams(0,-2,1f))
+      columns.addView(details,LinearLayout.LayoutParams(0,-2,1f).apply { marginStart=dp(20) })
+    } else { columns.addView(actions);columns.addView(details) }
+    page.addView(columns)
+    actions.addView(Spinner(this).apply {
+      adapter=ArrayAdapter(this@BackrestTestActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Backrest","Fore/aft","Height"))
+      minimumHeight=dp(60);controls+=this
       onItemSelectedListener=object:AdapterView.OnItemSelectedListener {
-        override fun onItemSelected(parent:AdapterView<*>?,view:View?,position:Int,id:Long) { val next=SeatSdkSource.values()[position];if(source!=next) { source=next;reset() } }
+        override fun onItemSelected(parent:AdapterView<*>?,view:View?,position:Int,id:Long) { val axis=listOf("backrest","horizontal","height")[position];if(axis!=selected) { selected=axis;observed=false;hasAttempt=false;pulseBefore=null;pulseAfter=null;output.text="Read $selected before testing.";update() } }
         override fun onNothingSelected(parent:AdapterView<*>?) {}
       }
-      minimumHeight=dp(64)
     })
-    access=text("");root.addView(access)
-    setupButton=button("Set up experiment access") {
-      AlertDialog.Builder(this).setTitle("Grant experiment access?")
-        .setMessage("Grant this app read access and BODYWORK_SET through its local setup connection. This is separate from read-only setup. It enables access only; it does not move anything, enable automatic recall or change startup recovery.")
-        .setNegativeButton("Cancel",null).setPositiveButton("Set up") { _,_->setupAccess() }.show()
-    };root.addView(setupButton)
-    output=text("Read compatibility first. Missing, zero, ambiguous and sentinel geometry values cannot be movement targets.",20f);root.addView(output)
-    readButton=button("Read current position") { prepare() };root.addView(readButton)
-    val actions=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL }
-    minus=button("Try −1 with selected method") { confirm(-1) };plus=button("Try +1 with selected method") { confirm(1) }
-    actions.addView(minus,LinearLayout.LayoutParams(0,-2,1f).apply { marginEnd=dp(12) });actions.addView(plus,LinearLayout.LayoutParams(0,-2,1f));root.addView(actions)
-    physical=button("I used the physical control") { markIntervention("physical-control") };restored=button("I restored the native preset") { markIntervention("native-preset-restored") }
-    root.addView(physical);root.addView(restored)
-    end=button("End observation") { stopObserving("owner ended observation") };root.addView(end)
-    root.addView(button("Back") { finish() })
-    setContentView(ScrollView(this).apply { addView(root) });showAccess();updateButtons()
+    val setup=button("Set up seat access") {
+      AlertDialog.Builder(this).setTitle("Grant native seat access?")
+        .setMessage("Grant missing read access and this app's SETTING_SET permission through the local setup connection. No movement, native preset change or automatic recall. The movement toggle remains separate.")
+        .setNegativeButton("Cancel",null).setPositiveButton("Set up") { _,_-> start("Setting up native access…") {
+          if(BuildConfig.DEMO) "Simulation needs no OEM grant." else NativeSeatAccess.enable(applicationContext)
+        } }.show()
+    };actions.addView(setup);controls+=setup
+    val read=button("Read seat and mirror positions") { readPositions() };actions.addView(read);controls+=read
+    val row=LinearLayout(this)
+    val increase=button("Forward / up · 100 ms") { confirm(1) }
+    val decrease=button("Back / down · 100 ms") { confirm(2) }
+    increase.tag="pulse";decrease.tag="pulse";controls+=increase;controls+=decrease
+    row.addView(increase,LinearLayout.LayoutParams(0,-2,1f).apply { marginEnd=dp(10) });row.addView(decrease,LinearLayout.LayoutParams(0,-2,1f));actions.addView(row)
+    actions.addView(button("Stop / cancel") { generation++;SeatMotionState.cancel();endObservation() })
+    val mirrors=button("Compare mirror read routes") { compareMirrors() };actions.addView(mirrors);controls+=mirrors
+    if(BuildConfig.DEMO) { val simulate=button("Simulate a saved seat load") { simulateLoad() };actions.addView(simulate);controls+=simulate }
+    output=text("Read first. Seat and mirror data stays in the private report and can be sent through ADB Lab. Only the backrest forward/release path has an owner-confirmed field result so far.",19f);details.addView(output)
+    physical=button("I used a physical control") { mark("physical-control") };details.addView(physical)
+    restored=button("I restored my native preset") { mark("native-preset-restored") };details.addView(restored)
+    directionConfirm=button("Confirm observed direction and stop") { confirmDirection() };details.addView(directionConfirm)
+    end=button("End observation") { endObservation() };details.addView(end)
+    page.addView(button("Back") { finish() })
+    setContentView(ScrollView(this).apply { addView(page) });update()
   }
-  private fun enabled()=SeatControl.enabled(this)
-  private fun showAccess() {
-    if(!::access.isInitialized) return
-    access.text=if(BuildConfig.DEMO) "Simulation only. No OEM command or permission grant."
-      else "Missing access: "+(VehicleReadSetup.missing(this)+if(checkSelfPermission(SeatExperimentAccess.WRITE)!=android.content.pm.PackageManager.PERMISSION_GRANTED) listOf(SeatExperimentAccess.WRITE) else emptyList()).joinToString { it.substringAfter("BYDAUTO_") }.ifBlank { "none; SDK compatibility still unverified" }
-  }
-  private fun updateButtons() {
-    if(!::readButton.isInitialized) return
-    readButton.isEnabled=active && !busy.get() && observingUntil==0L
-    val ready=active && !busy.get() && enabled() && baseline!=null && method!=SeatExperimentMethod.LEGACY && observingUntil==0L
-    minus.isEnabled=ready;plus.isEnabled=ready;setupButton.isEnabled=active && !busy.get() && observingUntil==0L
-    selectionControls.forEach { it.isEnabled=!busy.get() && observingUntil==0L }
-    end.visibility=if(observingUntil>0) View.VISIBLE else View.GONE
+  private fun update() {
+    if(!::output.isInitialized) return
+    val ready=active && !busy.get() && observingUntil==0L
+    controls.forEach { it.isEnabled=ready && (it.tag!="pulse" || observed) }
     physical.isEnabled=hasAttempt;restored.isEnabled=hasAttempt
+    end.visibility=if(observingUntil>0) View.VISIBLE else View.GONE
+    directionConfirm.isEnabled=active && !busy.get() && !manual && pulseBefore!=null && pulseAfter!=null
   }
-  private fun reset() {
-    generation++;baseline=null;observingUntil=0;hasAttempt=false;interventionAt=0;main.removeCallbacksAndMessages(null)
-    if(::output.isInitialized) output.text=if(method==SeatExperimentMethod.LEGACY) "Way A is retired: coupled movement was reported. Named bodywork aliases reach the same integer properties and are not offered as new methods."
-      else "${method.label} · ${source.label}. Read again before testing."
-    updateButtons()
-  }
-  private fun park():VehicleSnapshot {
+  private fun state():VehicleSnapshot {
     if(BuildConfig.DEMO) return DemoVehicle(this).snapshot()
-    val raw=parkBridge.rawPark();val awake=(getSystemService(POWER_SERVICE) as android.os.PowerManager).isInteractive
-    return VehicleSnapshot(if(raw.first==1 && awake) Gear.P else null,if(raw.second==3) true else null,null,SystemClock.elapsedRealtime())
+    val raw=parkBridge.rawPark()
+    val power=getSystemService(POWER_SERVICE) as android.os.PowerManager
+    return VehicleSnapshot(if(raw.first==1 && power.isInteractive) Gear.P else null,if(raw.second==3) true else null,null,SystemClock.elapsedRealtime())
   }
-  private fun readings(detailed:Boolean=true):Map<String,Double?> {
-    if(BuildConfig.DEMO) return demoGeometry.mapKeys { "geometry.${it.key}" }
-    val values=linkedMapOf<String,Double?>()
-    parkBridge.percentageSeatCandidates().forEach { (axis,value)->values["setting.$axis"]=value }
-    parkBridge.horizontalProperty()?.let { (value,evidence)->values["property.horizontal"]=value;SeatDiagnostics.event(this,trace,"observation axis=horizontal value=$value ${evidence.describe()}") }
-    val geometry=experimentBridge().read(trace,detailed=detailed)
-    geometry.forEach { (axis,value)->values["geometry.$axis"]=value }
-    return values
-  }
-  private fun geometry(values:Map<String,Double?>)=SeatExperiment.axes.associateWith { values["geometry.$it"] }
-  private fun log(stage:String,values:Map<String,Double?>) {
-    SeatDiagnostics.event(this,trace,"stage=$stage method=$method sdk=$source sampledAtMs=${SystemClock.elapsedRealtime()} values=$values ownerInterventionAtMs=$interventionAt attribution=${if(interventionAt>0) "owner-intervened" else "unverified"}")
-  }
-  private fun prepare() {
-    if(!active) return
-    if(!busy.compareAndSet(false,true)) { output.text="An earlier call is still running. No second call was queued.";return }
-    baseline=null;trace="seat-experiment-"+java.util.UUID.randomUUID();interventionAt=0;hasAttempt=false
-    val token=++generation;val selected=method
-    output.text="Reading compatibility for ${method.label} · ${source.label}…";updateButtons();deadline(token,"read")
+  private fun read():Map<String,PositionFeedback.Sample> = if(BuildConfig.DEMO) synchronized(demo) { demo.toMap() }
+    else FeedbackOemBridge(applicationContext,trace).use { it.read() }
+  private fun log(stage:String,values:Map<String,PositionFeedback.Sample>) { SeatDiagnostics.event(this,trace,"stage=$stage axis=$selected sampledAtMs=${SystemClock.elapsedRealtime()} values=$values ownerIntervened=$manual freshness=unverified") }
+  private fun start(label:String,block:()->String) {
+    if(!active || !busy.compareAndSet(false,true)) return
+    val token=generation;output.text=label;update()
     worker.execute {
-      val result=runCatching {
-        check(enabled()) { "Enable Allow seat movement in Settings first" }
-        check(selected!=SeatExperimentMethod.LEGACY) { "Way A is retired after coupled movement" }
-        RecallPolicy.blockReason(park(),SystemClock.elapsedRealtime())?.let { error(it) }
-        val a=readings();Thread.sleep(200);val b=readings();log("before-first",a);log("before-second",b)
-        val first=geometry(a);val second=geometry(b)
-        val payload=SeatExperiment.payload(selected,second,1)
-        if(!BuildConfig.DEMO) experimentBridge().requireWritableBackend()
-        else check(source==SeatSdkSource.NATIVE) { "Collector comparison is read-only" }
-        check(payload.keys.all { first[it]==second[it] }) { "Geometry changed during the read. Stop adjusting and read again." }
-        RecallPolicy.blockReason(park(),SystemClock.elapsedRealtime())?.let { error(it) }
-        second
-      }.onFailure { SeatDiagnostics.event(this,trace,"prepareRejected method=$selected sdk=$source cause="+SeatDiagnostics.failure(it)) }
+      val result=runCatching(block).onFailure { SeatDiagnostics.event(this,trace,"trialFailed="+SeatDiagnostics.failure(it)) }
       busy.set(false)
-      main.post { if(active && token==generation && !isFinishing) {
-        result.fold({ baseline=it;baselineAt=SystemClock.elapsedRealtime();output.text="${method.label} · ${source.label}\nGeneric geometry: $it\nCompatibility reads passed. Units, write behavior and physical travel remain unverified. Choose a numeric step, then confirm." },
-          { output.text="Not ready: ${it.message}" });updateButtons()
-      } }
+      main.post { if(active && token==generation) { output.text=result.getOrElse { "Stopped: ${it.message}" };update() } }
     }
   }
-  private fun deadline(token:Int,kind:String) {
-    main.postDelayed({ if(active && token==generation && busy.get()) {
-      generation++;baseline=null;output.text="$kind timed out. Outcome may be unknown. No retry or second call was queued. Wait or restart the app.";updateButtons()
-    } },20_000)
+  private fun readPositions() {
+    trace="native-trial-"+java.util.UUID.randomUUID();manual=false;hasAttempt=false;observed=false;pulseBefore=null;pulseAfter=null
+    start("Reading typed positions…") {
+      val data=read();log("before",data)
+      main.post { if(active) { observed=true;update() } }
+      data.entries.joinToString("\n") { (axis,sample)->"$axis: ${sample.value} · cache ${sample.cacheAtNs}" }+"\nRead time is not proof of fresh ECU data. Mirrors will not be moved."
+    }
   }
-  private fun confirm(delta:Int) {
-    val from=baseline ?: return
-    if(!active || busy.get()) return
-    if(SystemClock.elapsedRealtime()-baselineAt>30_000) { baseline=null;output.text="Read the position again before testing.";updateButtons();return }
-    val values=SeatExperiment.payload(method,from,delta)
-    val content=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(dp(24),dp(8),dp(24),dp(8)) }
-    content.addView(TextView(this).apply { text="${method.label}\nSDK: ${source.label}\nBackrest ${from["backrest"]} → ${values["backrest"]}\nPayload: floatArrayValue, ${values.size} seat axis/axes. Unchanged fields are preserved in Way C. Mirrors and steering are excluded.\n\nUnits, travel and coupling are unverified. The app cannot stop an in-flight command. One attempt only, with ten seconds of readback.";textSize=18f })
-    val acknowledged=CheckBox(this).apply { text="I am in P, the parking brake is applied, the seat is clear, and native controls are within reach.";minHeight=dp(76) };content.addView(acknowledged)
-    val token=generation
-    val dialog=AlertDialog.Builder(this).setTitle(if(BuildConfig.DEMO) "Simulate selected experiment?" else "Run selected experiment once?")
-      .setView(object:ScrollView(this) { override fun onMeasure(w:Int,h:Int) { super.onMeasure(w,View.MeasureSpec.makeMeasureSpec((resources.displayMetrics.heightPixels*.45f).toInt(),View.MeasureSpec.AT_MOST)) } }.apply { addView(content) })
-      .setNegativeButton("Cancel",null).setPositiveButton(if(BuildConfig.DEMO) "Simulate" else "Move once") { _,_->if(acknowledged.isChecked && active && token==generation) dispatch(from,delta,token) }.create()
-    dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled=false;acknowledged.setOnCheckedChangeListener { _,on->dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled=on } };dialog.show()
+  private fun confirm(direction:Int) {
+    if(!observed || busy.get() || !active) return
+    val axis=selected;val token=generation
+    val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(10),dp(20),dp(10)) }
+    root.addView(TextView(this).apply { text="Driver $axis · native signal $direction, then release=0 after a nominal 100 ms. Physical travel, other directions and axes remain experimental. No percentage target, native-bank change or mirror command. Native controls must remain within reach.";textSize=18f })
+    val check=CheckBox(this).apply { text="I am in P, parking brake applied, with clearance and native controls ready.";minHeight=dp(64) };root.addView(check)
+    val dialog=AlertDialog.Builder(this).setTitle(if(BuildConfig.DEMO) "Simulate one pulse?" else "Run one native pulse?")
+      .setView(ScrollView(this).apply { addView(root) }).setNegativeButton("Cancel",null)
+      .setPositiveButton(if(BuildConfig.DEMO) "Simulate" else "Move once") { _,_->if(active && token==generation && check.isChecked) pulse(axis,direction) }.create()
+    dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled=false;check.setOnCheckedChangeListener { _,on->dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled=on } };dialog.show()
   }
-  private fun dispatch(from:Map<String,Double?>,delta:Int,token:Int) {
-    if(!active || token!=generation || !busy.compareAndSet(false,true)) return
-    val commandToken=++generation;val requestedAt=SystemClock.elapsedRealtime();baseline=null;beforeCommand=emptyMap();hasAttempt=true
-    val selected=method;val selectedSource=source;val attempted=AtomicBoolean(false)
-    output.text="Final parked-state, geometry and request checks. One SDK call at most…";updateButtons();deadline(commandToken,"command")
-    worker.execute {
-      val result=runCatching {
-        val permit=SeatExperimentPermit.issue(selected,selectedSource,from,delta,requestedAt)
-        expectedTarget=checkNotNull(permit.values["backrest"]).toDouble()
-        SeatDiagnostics.event(this,trace,"ownerConfirmed=true "+SeatExperiment.describe(selected,selectedSource,permit.values)+" requestedAtMs=$requestedAt noAutomaticFallback=true")
-        beforeCommand=readings().toMap();log("before-command",beforeCommand)
-        val code=if(BuildConfig.DEMO) {
-          val values=permit.consume(SystemClock.elapsedRealtime(),demoGeometry,park(),active && commandToken==generation,enabled(),source)
-          attempted.set(true);demoGeometry=demoGeometry+values.mapValues { it.value.toDouble() };0
-        } else experimentBridge().send(trace,permit,::park,{ active && commandToken==generation && source==selectedSource },{ attempted.set(true) })
-        SeatDiagnostics.event(this,trace,"setterReturned method=$selected sdk=$selectedSource rawResult=$code commandsAttempted=1 physicalCompletion=unverified")
-        check(code==0) { "SDK returned $code. No fallback will run." }
-      }.onFailure { SeatDiagnostics.event(this,trace,"commandFailed method=$selected sdk=$selectedSource attempted=${attempted.get()} cause="+SeatDiagnostics.failure(it)+" noRetry=true") }
-      busy.set(false)
-      main.post { if(active && commandToken==generation && !isFinishing) {
-        output.text=result.fold({ "SDK returned zero; physical completion is unverified. Observing available axes…" },{ "${if(attempted.get()) "Attempt outcome unverified" else "Rejected before dispatch"}: ${it.message}. No retry." })
-        observingUntil=SystemClock.elapsedRealtime()+10_000;updateButtons();observe(commandToken)
-      } }
+  private fun pulse(axis:String,direction:Int) {
+    val requestedAt=SystemClock.elapsedRealtime();val token=generation;observed=false;hasAttempt=true
+    start("Checking P, brake and native access…") {
+      check(SeatMotionState.operations.beginMotion()) { "Another seat load or trial is running" }
+      try {
+        val before=read();pulseBefore=before;pulseAfter=null;pulseAxis=axis;pulseDirection=direction;manual=false;log("before-pulse",before)
+        val sdk=if(BuildConfig.DEMO) null else FeedbackOemBridge(applicationContext,trace)
+        sdk.use {
+          it?.prepareSignals()
+          check(SeatControl.enabled(this)) { "Enable Seat movement first" }
+          RecallPolicy.blockReason(state(),SystemClock.elapsedRealtime())?.let { reason->error(reason) }
+          check(active && token==generation && SystemClock.elapsedRealtime()-requestedAt<=RecallPolicy.MAX_AGE_MS) { "Trial cancelled or request expired" }
+          SeatDiagnostics.event(this,trace,"ownerConfirmed=true nativeSignal axis=$axis direction=$direction release=0 pulseMs=100 driverArea=1")
+          // Logging is complete before the final P/foreground check and signal.
+          RecallPolicy.blockReason(state(),SystemClock.elapsedRealtime())?.let { reason->error(reason) }
+          check(active && token==generation && SeatControl.enabled(this)) { "Trial cancelled" }
+          val at=SystemClock.elapsedRealtime()
+          try {
+            if(BuildConfig.DEMO) synchronized(demo) { val old=demo.getValue(axis);demo[axis]=PositionFeedback.Sample(old.value+if(direction==1) 1 else -1,old.cacheAtNs+1) }
+            else it!!.signal(axis,direction)
+            Thread.sleep(FeedbackSeatRecall.PULSE_MS)
+          } finally {
+            val released=runCatching { it?.signal(axis,0) }
+            SeatDiagnostics.event(this,trace,"nativeRelease axis=$axis attempted=true returned=${released.isSuccess} elapsedMs=${SystemClock.elapsedRealtime()-at} physicalStop=owner-check")
+            released.getOrThrow()
+          }
+        }
+        main.post { if(active && token==generation) { observingUntil=SystemClock.elapsedRealtime()+10_000;update();observe(token) } }
+        "One pulse and release requested. Observing. Confirm the actual movement and stop; SDK returns are not physical completion."
+      } finally { SeatMotionState.operations.endMotion() }
     }
   }
   private fun observe(token:Int) {
     if(!active || token!=generation || observingUntil==0L) return
-    if(SystemClock.elapsedRealtime()>=observingUntil) { stopObserving("observation window ended");return }
+    if(SystemClock.elapsedRealtime()>=observingUntil) { endObservation();return }
     if(!busy.compareAndSet(false,true)) { main.postDelayed({ observe(token) },500);return }
     worker.execute {
-      val result=runCatching { readings(detailed=false) }.onSuccess { log("after",it);SeatDiagnostics.event(this,trace,BackrestTestReadback.describe(beforeCommand,it,expectedTarget,"geometry.backrest")+" ownerInterventionAtMs=$interventionAt") }
-        .onFailure { SeatDiagnostics.event(this,trace,"observationFailed="+SeatDiagnostics.failure(it)) }
+      val result=runCatching { read() }.onSuccess { pulseAfter=it;log("after",it) }.onFailure { SeatDiagnostics.event(this,trace,"readbackFailed="+SeatDiagnostics.failure(it)) }
       busy.set(false)
       main.post {
-        if(active && !isFinishing) updateButtons()
+        if(active) update()
         if(active && token==generation && observingUntil>0) {
-        result.onSuccess { output.text="${method.label} · ${source.label}\n$it\n"+BackrestTestReadback.describe(beforeCommand,it,expectedTarget,"geometry.backrest")+if(interventionAt>0) "\nOwner intervention marked; these readings cannot be attributed solely to the app command." else "\nUse the markers below if you intervene. End observation does not stop the seat." }
-        main.postDelayed({ observe(token) },500)
+        result.onSuccess {
+          val rendered=it.entries.joinToString("\n") { (axis,value)->"$axis: ${value.value}" }+if(manual) "\nOwner intervention marked; physical-action time is unknown." else "\nObservation only. Cache timestamps are in the private report."
+          if(output.text.toString()!=rendered) output.text=rendered
+        }
+        update();main.postDelayed({ observe(token) },500)
       } }
     }
-    main.postDelayed({ if(active && token==generation && observingUntil>0 && SystemClock.elapsedRealtime()>=observingUntil) stopObserving("observation deadline reached") },(observingUntil-SystemClock.elapsedRealtime()).coerceAtLeast(1))
   }
-  private fun markIntervention(kind:String) {
-    interventionAt=SystemClock.elapsedRealtime();val token=++generation;baseline=null;main.removeCallbacksAndMessages(null)
-    SeatDiagnostics.event(this,trace,"ownerIntervention=$kind reportedAtMs=$interventionAt timingOfPhysicalAction=unverified earlierSamplesMayIncludeIntervention=true")
-    output.text="Owner intervention marked. Earlier samples may also include manual movement. This marker sends no vehicle command."
-    observingUntil=SystemClock.elapsedRealtime()+10_000;updateButtons();observe(token)
+  private fun mark(kind:String) {
+    manual=true;update()
+    SeatDiagnostics.event(this,trace,"ownerIntervention=$kind reportedAtMs=${SystemClock.elapsedRealtime()} earlierSamplesMayIncludeIntervention=true actualActionTime=unknown")
+    output.text="Owner intervention recorded. The marker sends no vehicle command."
   }
-  private fun stopObserving(reason:String) {
-    observingUntil=0;baseline=null;main.removeCallbacksAndMessages(null)
-    SeatDiagnostics.event(this,trace,"observationEnded reason=$reason physicalCompletion=unverified ownerInterventionAtMs=$interventionAt")
-    output.text="Observation ended. Review the private report and physical position. No completion is claimed.";updateButtons()
+  private fun confirmDirection() {
+    if(manual || busy.get()) return
+    val before=pulseBefore ?: return
+    val after=pulseAfter ?: return
+    val inferred=runCatching { SeatSignalProfile.infer(pulseAxis,pulseDirection,before,after) }.getOrElse { output.text="Direction not usable: ${it.message}";return }
+    AlertDialog.Builder(this).setTitle("Confirm $pulseAxis behavior?")
+      .setMessage("Confirm only the selected seat axis moved briefly and stopped by itself, with no physical intervention. Signal $inferred will mean a higher saved coordinate on this firmware. This changes no saved coordinates and sends no command.")
+      .setNegativeButton("Cancel",null).setPositiveButton("Confirm") { _,_->
+        runCatching { SeatSignalProfile.save(this,if(BuildConfig.DEMO) "simulation" else FeedbackOemBridge.source(this),pulseAxis,inferred) }
+          .onSuccess { SeatDiagnostics.event(this,trace,"ownerConfirmedDirection axis=$pulseAxis increasingSignal=$inferred pulseSignal=$pulseDirection before=$before after=$after physicalStop=owner-confirmed");output.text="Direction saved for this firmware. No movement was sent." }
+          .onFailure { output.text="Direction was not saved: ${it.message}" }
+      }.show()
   }
-  private fun setupAccess() {
-    if(!active || observingUntil!=0L) return
-    if(BuildConfig.DEMO) { output.text="Simulation needs no OEM permission grant.";return }
-    if(!busy.compareAndSet(false,true)) return
-    baseline=null;val token=++generation;output.text="Setting up experiment permissions…";updateButtons()
-    worker.execute {
-      val text=runCatching { SeatExperimentAccess.enable(this) }.getOrElse { SeatDiagnostics.event(this,trace,"accessFailed="+SeatDiagnostics.failure(it));"Setup failed: ${it.message}" }
-      busy.set(false);main.post { if(active && token==generation && !isFinishing) { output.text=text;showAccess();updateButtons() } }
+  private fun endObservation() { observingUntil=0;main.removeCallbacksAndMessages(null);observed=false;output.text="Observation ended. Review physical behavior and the private report.";update() }
+  private fun compareMirrors() {
+    start("Comparing fixed mirror getter routes…") {
+      if(BuildConfig.DEMO) { log("mirror-read-simulation",read());"Simulation: all four mirror readings recorded. No mirror command." }
+      else {
+        val report=MirrorReadProbe.read(applicationContext,trace)
+        "Mirror comparison saved: four axes, two SDK sources, direct and generic getters, with typed before/after readings. No mirror command. Full results are in the private report.\n\n"+report.lineSequence().filter { it.startsWith("mirror-typed stage=after") }.take(4).joinToString("\n")
+      }
     }
   }
-  override fun onResume() { super.onResume();active=true;showAccess();updateButtons() }
-  override fun onPause() { active=false;generation++;baseline=null;observingUntil=0;main.removeCallbacksAndMessages(null);super.onPause() }
+  private fun simulateLoad() {
+    val requested=SystemClock.elapsedRealtime();pulseBefore=null;pulseAfter=null;hasAttempt=false
+    start("Simulating the independent coordinate loader…") {
+      val target=read().filterKeys { it in PositionFeedback.seatAxes }.mapValues { it.value.value+2 }
+      val token=generation
+      val port=object:FeedbackSeatRecall.Port {
+        override fun clock()=SystemClock.elapsedRealtime()
+        override fun pause(ms:Long)=Thread.sleep(ms)
+        override fun enabled()=SeatControl.enabled(this@BackrestTestActivity)
+        override fun active()=active && token==generation
+        override fun vehicle()=state()
+        override fun read()=this@BackrestTestActivity.read()
+        override fun signal(axis:String,direction:Int) { if(direction!=0) synchronized(demo) { val old=demo.getValue(axis);demo[axis]=PositionFeedback.Sample(old.value+if(direction==1) 1 else -1,old.cacheAtNs+1) } }
+        override fun audit(detail:String)=SeatDiagnostics.event(this@BackrestTestActivity,trace,"simulation $detail")
+      }
+      val result=FeedbackSeatRecall.run(port,target,requested)
+      "Simulated saved seat matched after ${result.pulses} pulses. No OEM command."
+    }
+  }
+  override fun onResume() { super.onResume();active=true;update() }
+  override fun onPause() { active=false;generation++;observingUntil=0;main.removeCallbacksAndMessages(null);super.onPause() }
   companion object {
     private val busy=AtomicBoolean(false)
-    private val worker=Executors.newSingleThreadExecutor { task->Thread(task,"owner-seat-experiment").apply { isDaemon=true } }
-    private val bridges=mutableMapOf<SeatSdkSource,BodyworkExperimentBridge>()
-    @Volatile private var demoGeometry:Map<String,Double?> = SeatExperiment.axes.associateWith { 50.0 }
+    private val worker=Executors.newSingleThreadExecutor { task->Thread(task,"native-seat-trial").apply { isDaemon=true } }
+    private val demo=PositionFeedback.properties.keys.associateWith { PositionFeedback.Sample(50.0,100L) }.toMutableMap()
   }
 }

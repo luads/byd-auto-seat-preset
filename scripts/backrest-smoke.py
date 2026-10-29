@@ -49,32 +49,28 @@ def pref(name,key,default='false'):
 def log():
     raw=adb('exec-out','run-as',package,'cat','files/private-observations.log')
     return '' if b'No such file' in raw else raw.decode()
-def return_ids():return re.findall(r'trace=([^ ]+).*setterReturned method=',log())
-# Old entries can rotate out of the bounded private log during a test. Count only this run.
-previous_returns=set(return_ids())
-def count():return sum(trace not in previous_returns for trace in return_ids())
+def release_ids():return re.findall(r'trace=([^ ]+).*nativeRelease axis=',log())
+previous=set(release_ids())
+def count():return sum(trace not in previous for trace in release_ids())
 def acknowledge():
     checkbox=next(n for n in ui().iter('node') if n.get('class')=='android.widget.CheckBox')
     x1,y1,x2,y2=bounds(checkbox);adb('shell','input','tap',str((x1+x2)//2),str((y1+y2)//2))
 def top():
-    for _ in range(9):scroll(False)
+    for _ in range(8):scroll(False)
+def read():
+    seek('Read seat and mirror positions');tap('Read seat and mirror positions');time.sleep(.5)
 def end_observation():
     for _ in range(8):
-        root=ui();nodes=match('End observation',root)
-        if not nodes:
-            assert any(n.get('text','').startswith('Observation ended.') for n in root.iter('node')),'Observation ended without its status'
-            return
+        nodes=match('End observation')
+        if not nodes:return  # The ten-second window can expire during a UI dump.
         x1,y1,x2,y2=bounds(nodes[0])
         if y2>y1 and y1>=40 and y2<1040:
-            adb('shell','input','tap',str((x1+x2)//2),str((y1+y2)//2));time.sleep(.2);return
+            adb('shell','input','tap',str((x1+x2)//2),str((y1+y2)//2));return
         scroll()
-    raise AssertionError('Cannot end observation')
-def read():
-    seek('Read current position');tap('Read current position');time.sleep(.5)
+    assert not match('End observation'),'Cannot end observation'
 adb('shell','wm','size','1920x1080');adb('shell','wm','density','240')
 adb('shell','am','force-stop',package)
 adb('shell','am','start','-n',package+'/dev.lua.seatpreset.MainActivity')
-# Horizontal header must leave the title room and must not create a tall empty gap.
 root=ui();header=match('Seat Presets',root)
 if header:
     x1,y1,x2,y2=bounds(header[0]);assert x2-x1>200 and y2-y1<100,'Collapsed home title'
@@ -83,41 +79,40 @@ tap('Settings');top()
 movement=pref('seat-control','enabled');developer=pref('seat-presets-v1','developer-mode')
 seek('Allow seat movement')
 if movement!='true':tap('Allow seat movement');tap('Enable')
-if developer!='true':
-    seek('Developer tools');tap('Developer tools')
-seek('Seat experiments · simulation');tap('Seat experiments · simulation')
-read();seek('Try −1 with selected method');baseline=count()
-tap('Try −1 with selected method')
+if developer!='true':seek('Developer tools');tap('Developer tools')
+seek('Seat trials · simulation');tap('Seat trials · simulation')
+read();seek('Forward / up · 100 ms');baseline=count()
+tap('Forward / up · 100 ms')
 assert match('Simulate')[0].get('enabled')=='false','Confirmation not gated'
-snapshot('01-confirmation')
-tap('Cancel');assert count()==baseline,'Cancel sent a command'
-read();seek('Try −1 with selected method');tap('Try −1 with selected method');acknowledge();tap('Simulate');time.sleep(1)
-assert count()==baseline+1,'Expected one simulated B command'
-assert 'targetReported=true' in log(),'Target readback not traced'
-snapshot('02-single-readback')
-seek('I used the physical control');tap('I used the physical control');time.sleep(.5)
-assert 'ownerIntervention=physical-control' in log(),'Missing intervention marker'
+snapshot('01-confirmation');tap('Cancel');assert count()==baseline,'Cancel dispatched'
+read();seek('Forward / up · 100 ms');tap('Forward / up · 100 ms');acknowledge();tap('Simulate');time.sleep(1)
+assert count()==baseline+1,'Expected one native simulated pulse and release'
+assert 'stage=after axis=backrest' in log(),'Missing readback'
+snapshot('02-native-readback')
+seek('I used a physical control');tap('I used a physical control')
+assert 'ownerIntervention=physical-control' in log(),'Missing physical marker'
+assert match('Confirm observed direction and stop')[0].get('enabled')=='false','Intervened trial learned direction'
 end_observation();top()
-seek('C · Bodywork float · seat batch');tap('C · Bodywork float · seat batch')
-read();seek('Try +1 with selected method');tap('Try +1 with selected method');acknowledge();tap('Simulate');time.sleep(1)
-assert count()==baseline+2,'Expected one simulated C command'
-assert 'method=BATCH sdk=NATIVE payload=floatArrayValue axis=horizontal' in log(),'Batch payload not traced'
-snapshot('03-batch-readback')
-seek('I restored the native preset');tap('I restored the native preset');time.sleep(.5)
-assert 'ownerIntervention=native-preset-restored' in log(),'Missing native restoration marker'
-end_observation();top()
-seek('A · Integer setter · retired');tap('A · Integer setter · retired')
-seek('Try −1 with selected method');assert match('Try −1 with selected method')[0].get('enabled')=='false','Retired method enabled'
-top();seek('B · Bodywork float · one axis');tap('B · Bodywork float · one axis')
-read();seek('Try −1 with selected method');tap('Try −1 with selected method');acknowledge()
+seek('Compare mirror read routes');tap('Compare mirror read routes');time.sleep(.5)
+assert 'mirror-read-simulation' in log(),'Mirror read not logged'
+snapshot('03-mirror-read')
+seek('Simulate a saved seat load');tap('Simulate a saved seat load');time.sleep(2)
+assert any('Simulated saved seat matched after 6 pulses' in n.get('text','') for n in ui().iter('node')),'Independent loader did not complete'
+assert 'simulation feedback axis=height' in log(),'Full loader feedback missing'
+snapshot('04-independent-load')
+read();seek('Back / down · 100 ms');tap('Back / down · 100 ms');acknowledge();tap('Simulate');time.sleep(1)
+end_observation();seek('Confirm observed direction and stop');tap('Confirm observed direction and stop');tap('Confirm')
+assert 'ownerConfirmedDirection axis=backrest' in log(),'Explicit direction confirmation not saved'
+snapshot('05-direction-confirmation')
+read();seek('Forward / up · 100 ms');tap('Forward / up · 100 ms');acknowledge();before=count()
 adb('shell','input','keyevent','3')
 adb('shell','am','start','-n',package+'/dev.lua.seatpreset.MainActivity');time.sleep(.3)
 if match('Simulate'):tap('Simulate')
-assert count()==baseline+2,'Background confirmation dispatched'
+assert count()==before,'Background confirmation dispatched'
 adb('shell','am','force-stop',package)
 adb('shell','am','start','-n',package+'/dev.lua.seatpreset.MainActivity');tap('Settings');top()
 seek('Allow seat movement')
 if movement!='true' and pref('seat-control','enabled')=='true':tap('Allow seat movement')
 seek('Developer tools')
 if developer!='true' and pref('seat-presets-v1','developer-mode')=='true':tap('Developer tools')
-print('PASS: home header, acknowledgement, cancellation, B/C one command each, payload/readback logs, markers, A retired, background invalidation, preference restore',flush=True)
+print('PASS: home, acknowledgement, cancel, native simulated pulse/release/readback, intervention rejection, mirrors read-only, six-pulse independent load, owner direction profile, background invalidation, preference restore',flush=True)

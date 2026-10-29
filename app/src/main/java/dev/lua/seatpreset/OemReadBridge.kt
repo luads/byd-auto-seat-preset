@@ -9,6 +9,7 @@ internal class OemReadBridge(private val context: Context) {
   private val loader by lazy {
     StorageAccess.requireUnlocked(context)
     val info = context.packageManager.getApplicationInfo("com.byd.data.collect", 0)
+    check(info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM!=0) { "OEM SDK package is not a system app" }
     PathClassLoader((listOf(info.sourceDir) + info.splitSourceDirs.orEmpty()).joinToString(":"), context.classLoader)
   }
   private fun device(kind: String): Any = devices.getOrPut(kind) {
@@ -44,19 +45,7 @@ internal class OemReadBridge(private val context: Context) {
       }
     }
   }.onFailure { SeatDiagnostics.event(context,"property-read","unavailable="+SeatDiagnostics.failure(it)) }.getOrNull()
-  fun seat(): Position {
-    val values=linkedMapOf<String,Double>()
-    val evidence=linkedMapOf<String,CoordinateEvidence>()
-    mapOf("horizontal" to "getSeatHorization","backrest" to "getSeatbackrestPostion","height" to "getSeatTurnHeight").forEach { (axis,method) ->
-      values[axis]=number("setting",method,1)
-      evidence[axis]=CoordinateEvidence("setting.$method",android.os.SystemClock.elapsedRealtime())
-    }
-    if(values["horizontal"]==0.0) horizontalProperty()?.let { (raw, provenance) -> values["horizontal"]=raw;evidence["horizontal"]=provenance }
-    check(SeatObservation.usable(values)) { "Seat readings are unavailable or outside the candidate range" }
-    Startup.times.sampled(android.os.SystemClock.elapsedRealtime())
-    return Position(values, "byd-setting-driver-1:" + java.security.MessageDigest.getInstance("SHA-256").digest((android.os.Build.FINGERPRINT + ":" + context.packageManager.getPackageInfo("com.byd.data.collect", 0).longVersionCode).toByteArray()).joinToString("") { "%02x".format(it) }.take(32), SeatObservation.FORMAT,evidence)
-      .also { SeatDiagnostics.event(context,"seat-read",SeatDiagnostics.position("observed",it)) }
-  }
+  fun seat():Position = FeedbackOemBridge(context,"seat-read").use { it.position() }
   fun backrest(): Double = number("setting","getSeatbackrestPostion",1)
   /** Exact setting getters as raw diagnostic values, without fallback or preset conversion. */
   fun percentageSeatCandidates(): Map<String, Double?> = mapOf(
@@ -107,25 +96,5 @@ internal class OemReadBridge(private val context: Context) {
     // This checks reported state only, not cache freshness. Physical confirmation is still required.
     return GearModeRead.parked(raw.first, raw.second)
   }
-  fun bindAxisWriter(axis: String): (Int) -> Unit {
-    check(SeatWritePolicy.allowed()) { SeatWritePolicy.BLOCK_REASON }
-    val methodName = when (axis) {
-      "horizontal" -> "turnSeatHorizationPercent"
-      "backrest" -> "turnSeatbackrestPercent"
-      "height" -> "turnSeatHeightPercent"
-      else -> error("Unsupported axis")
-    }
-    val obj = device("setting")
-    val method = obj.javaClass.getMethod(methodName, Int::class.javaPrimitiveType, Int::class.javaPrimitiveType)
-    check(method.returnType == Void.TYPE) { "Setter contract changed" }
-    check(context.checkCallingOrSelfPermission("android.permission.BYDAUTO_SETTING_SET") == android.content.pm.PackageManager.PERMISSION_GRANTED) { "OEM seat-write permission unavailable" }
-    return { value ->
-      StorageAccess.requireUnlocked(context)
-      require(value in 1..99)
-      // Defense in depth, including callers that bypass the shared recall controller.
-      check(SeatWritePolicy.allowed()) { SeatWritePolicy.BLOCK_REASON }
-      method.invoke(obj, 1, value)
-    }
-  }
-
+  fun bindAxisWriter(axis:String):(Int)->Unit { check(SeatWritePolicy.absoluteAllowed()) { "Absolute percentage writes are retired. Use native feedback control." };error("No absolute writer is bound for $axis") }
 }

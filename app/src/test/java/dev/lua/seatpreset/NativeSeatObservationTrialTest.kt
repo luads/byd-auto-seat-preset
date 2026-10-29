@@ -6,6 +6,7 @@ import org.junit.Test
 class NativeSeatObservationTrialTest {
   private fun sample(at: Long, x: Double? = 20.0, y: Double? = 3.0) = NativeSeatObservationTrial.Sample(at, mapOf("setting.horizontal" to x, "bodywork.backrest" to y))
   @Test fun nativeChangeAndReturnProduceEvidenceWithoutEnablingAnyWriter() {
+    val before = SeatWritePolicy.allowed()
     val trial = NativeSeatObservationTrial()
     trial.add("horizontal", sample(100))
     trial.add("horizontal", sample(200, 25.0))
@@ -14,7 +15,8 @@ class NativeSeatObservationTrialTest {
     assertTrue(report.contains("changed and returned"))
     assertTrue(report.contains("flat; cached values"))
     assertTrue(report.contains("no writer validated"))
-    assertFalse(SeatWritePolicy.allowed())
+    assertEquals(before,SeatWritePolicy.allowed())
+    assertFalse(SeatWritePolicy.absoluteAllowed())
   }
   @Test fun unavailableAndZeroRemainRawObservationsRatherThanTargets() {
     val trial = NativeSeatObservationTrial()

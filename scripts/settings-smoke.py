@@ -63,7 +63,10 @@ def seek(label, contains=False):
             _,y1,_,y2=bounds(nodes[0])
             if y2>y1 and y1>=180 and y2<=height-24:
                 return
-            scroll(down=(y2>height-24))
+            # Use a short correction near viewport edges to avoid oscillating past a row.
+            delta=(height-60-y2) if y2>height-24 else (210-y1)
+            delta=max(-200,min(200,delta))
+            adb('shell','input','swipe','64','500','64',str(500+delta),'250')
         else:
             scroll()
     raise AssertionError('Cannot find ' + label)

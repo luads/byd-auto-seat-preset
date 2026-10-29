@@ -116,16 +116,17 @@ class HomeVisibilityService : AccessibilityService() {
       val preset = PresetStore(this).all().firstOrNull { it.id == id }
       if (preset != null) {
         if (BuildConfig.DEMO) Toast.makeText(this, Vehicle.recall(this, preset).message, Toast.LENGTH_LONG).show()
-        else Vehicle.requestRecall(this,preset,origin=RecallOrigin.PANEL) { result -> Toast.makeText(this,result.message,Toast.LENGTH_LONG).show() }
+        else Vehicle.requestRecall(this,preset,origin=RecallOrigin.PANEL) { result -> panel?.findViewWithTag<View>("stop-seat-load")?.visibility=View.GONE;Toast.makeText(this,result.message,Toast.LENGTH_LONG).show() }
       }
-    }, previewOnly = !BuildConfig.DEMO)
+    }, previewOnly = false)
     val params = PanelPlacement.params(this)
-    windows.addView(view, params); panel = view
+    windows.addView(view, params); panel = view;SeatMotionState.panelVisible=true
     PanelPlacement.draggable(this, view, windows, params)
     PanelMotion.show(view)
     WidgetDiagnostics.record(this, "home panel shown")
   }
   fun hide(animated: Boolean = false) {
+    SeatMotionState.panelVisible=false
     if (!animated) homeVisible = false
     val view = panel ?: return
     if (!animated) { removePanel(); return }
@@ -139,7 +140,7 @@ class HomeVisibilityService : AccessibilityService() {
   }
   private fun removePanel() {
     val view = panel
-    panel = null; fading = false
+    panel = null; fading = false;SeatMotionState.panelVisible=false
     view?.let { it.animate().cancel(); runCatching { windows.removeViewImmediate(it) }; WidgetDiagnostics.record(this, "home panel hidden") }
   }
   override fun onInterrupt() { hide() }

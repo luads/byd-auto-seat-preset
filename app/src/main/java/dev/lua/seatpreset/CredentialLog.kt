@@ -80,7 +80,8 @@ internal class CredentialLog(private val name: String, private val limit: Int = 
 
 /** Seat observations stay separate from setup logs; only explicit owner diagnostic transfer exports them. */
 internal object PrivateDiagnostics {
-  private val log = CredentialLog("private-observations.log")
+  const val LIMIT=180_000
+  private val log = CredentialLog("private-observations.log",LIMIT)
   fun record(context: Context, event: String) = log.append(context, event)
   fun flush(context: Context) = log.flush(context)
   fun clear(context: Context) { log.clear(context); SeatSignatureInventory.clear(context); SeatDiagnosticTransfer.clear(context) }
@@ -93,6 +94,6 @@ internal object PrivateDiagnostics {
   fun report(context: Context): String {
     StorageAccess.requireUnlocked(context); log.flush(context)
     val file = File(context.filesDir, "private-observations.log")
-    return if (file.exists()) file.readText().takeLast(128_000) else "No private trials recorded"
+    return if (file.exists()) file.readText().takeLast(LIMIT) else "No private trials recorded"
   }
 }
