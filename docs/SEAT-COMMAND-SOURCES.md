@@ -1,0 +1,11 @@
+# Seat command reference review
+
+Reviewed 2026-10-29. Source inspection does not validate this car's setter contract. No external implementation was copied.
+
+- [OverDrive BodyworkSeatProbe](https://github.com/yash-srivastava/Overdrive-release/blob/263e7df05a68eb61322478684c12c3febf0cb25f/app/src/main/java/com/overdrive/app/byd/BodyworkSeatProbe.java), MIT, pinned 263e7df: generic `set(int[], BYDAutoEventValue)` with `floatArrayValue`. Separate single-axis writes and a full grouped apply exist. On DiLink 5, requests are routed to its main-process actuator service before invoking these probe methods. Our app does not depend on that service or claim an equivalent SDK environment. Our B/C experiments compare one axis with seven seat axes only. OverDrive's full apply also touches mirrors/steering; ours excludes them. We do not copy SDK injection or permission-context replacement. Missing axes are rejected rather than filled with 127.5.
+- [BYDMate AdaptiveSeatChannel](https://github.com/AndyShaman/BYDMate/blob/1041b139bd78924dae1474efe9347a179dbac824/app/src/main/kotlin/com/bydmate/app/data/vehicle/AdaptiveSeatChannel.kt), PolyForm Noncommercial, pinned 1041b13: thermal seat channels, not a positioning contract. No code copied or positioning method inferred.
+- [byd-seat-memory LoadSeatMemory](https://github.com/Maheidem/byd-seat-memory/blob/f90f0f77d3158592fb4f4d68a4c330aef661a003/decompiled_reference/sources/br/com/rory/electro/socket/io/action/LoadSeatMemory.java), pinned f90f0f7: delegates to native methods. The reviewed Java does not reveal an executable coordinate payload. Not offered as a third live method.
+
+The former named backrest setter and bodywork aliases are not independent routes. Earlier owner firmware review found integer-property dispatch and a generic compatibility manager that can convert float payloads to integer zero. Collector writes and known AbsTsMyCar backends stay quarantined. Native MyCar system SDK compatibility must be established independently by the app's read-only checks. Unknown geometry or inaccessible backend inspection must fail closed.
+
+Fresh sampling time is not proof of fresh ECU data. Old percentage observations and saved preset coordinates are not converted into geometry targets. Normal loading stays paused.

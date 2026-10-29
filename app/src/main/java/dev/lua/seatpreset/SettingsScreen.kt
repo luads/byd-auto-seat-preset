@@ -253,7 +253,7 @@ internal fun SeatSettingsScreen(state:SettingsUiState,onAction:(SettingsAction)-
 @Composable private fun DiagnosticsCard(state:SettingsUiState,action:(SettingsAction)->Unit,confirm:(SettingsAction,String,String,String)->Unit) {
   fun send(command:SettingsCommand) { action(SettingsAction.Command(command)) }
   Section("Diagnostics") {
-    TonalAction(if(state.demo) "Backrest test · simulation" else "Backrest movement test",Modifier.fillMaxWidth()) { send(SettingsCommand.BACKREST_TEST) }
+    TonalAction(if(state.demo) "Seat experiments · simulation" else "Seat command experiments",Modifier.fillMaxWidth()) { send(SettingsCommand.BACKREST_TEST) }
     if(!state.demo) TonalAction("Inspect saved positions",Modifier.fillMaxWidth()) { send(SettingsCommand.INSPECT) }
     TonalAction("Native seat observation trial",Modifier.fillMaxWidth()) { send(SettingsCommand.SEAT_TRIALS) }
     if (!state.demo) {

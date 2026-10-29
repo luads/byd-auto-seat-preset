@@ -1,15 +1,23 @@
-# Owner-confirmed backrest experiment
+# Owner-confirmed seat experiments
 
-This is a separately requested experimental write path, not validated preset recall. Normal card, panel, child-lock and widget loading remains blocked. It does not convert or change saved presets.
+Normal card, panel, child-lock and widget loading stays blocked. Saved presets are unchanged. The former integer backrest experiment caused coupled movement. The owner stopped it using the physical control and restored a native preset. Later observations cannot be attributed solely to the app.
 
-In Developer tools, open **Backrest movement test**. **Allow seat movement** must be on. Read the current position, choose **Backrest −1 unit** or **Backrest +1 unit**, review the current/target readings, confirm that P, parking brake, clearance and native controls are available, then press **Move once**. Cancel sends no command. No foot-brake input is required.
+Open **Seat command experiments** in Developer tools. Enable **Allow seat movement** separately. Choose a method and SDK, use **Set up experiment access** if needed, then **Read current position**. Choose −1 or +1, review the exact method, source and numeric target, acknowledge P/parking brake/clearance/native controls, then press **Move once**. Cancel sends nothing. No foot-brake input is required.
 
-The number is one OEM numeric unit, not a verified physical distance. Units, payload meaning and coupling remain unverified. Unexpected or larger travel is possible. The app has no verified seat-stop command. End observation only ends the readback window. Only run this owner-operated experiment when able to inspect and physically restore the position.
+| Method | Payload | Availability |
+| --- | --- | --- |
+| A · Integer setter | Former named percentage setter | Retired after coupled movement. Aliases are not independent methods. |
+| B · Bodywork float · one axis | One backrest identifier and floatArrayValue | Experimental Native MyCar SDK route only. |
+| C · Bodywork float · seat batch | Seven seat identifiers, preserving six current values | Requires all seven current values. No mirror, steering, zero fill or sentinel fill. |
 
-The path binds only `BYDAutoSettingDevice.turnSeatbackrestPercent(int, int)`, driver area 1. It accepts a stable integral backrest baseline from 3 through 97 and a delta of exactly -1 or +1. It checks the signature and already-held SET permission, then rechecks reported P/parking brake, screen/foreground state, opt-in, unchanged backrest and the original two-second request deadline before consuming a single-use permit. No file I/O occurs between the final check and the invocation. It does not grant SET permission, batch axes, load a preset or retry the setter.
+The collector SDK is available for read comparison only. Each choice needs a new read. No automatic source/method fallback runs. Experiment access explicitly grants BODYWORK_SET separately from read-only setup. Access alone does not enable movement, startup recovery or normal recalls. Protected permission failures remain visible; the app does not replace permission contexts or inject a shared classloader.
 
-Private logs record the explicit confirmation, method arguments, pre-command observations, whether dispatch was attempted, setter return/failure and available readbacks for ten seconds. They report other routes that changed and whether the backrest target was reported. A matching readback or successful setter return is not physical completion. Unknown/cached data stays labelled unverified. No raw seat data goes into public logs or automatic delivery.
+The owned loader uses the selected installed system APK and declared libraries. The generic getter must return unambiguous numeric geometry. Zero, missing, unsupported, sentinel or out-of-range readings reject preparation. Known TS integer-dispatch backends are quarantined. Passing these checks is compatibility evidence only, not validated physical behavior.
 
-Leaving the screen invalidates pending dispatch and ends observation. It cannot undo a command already in flight. UI deadlines discard late acceptance without interrupting OEM code. A stuck call occupies the one process-wide test worker; it cannot create a command backlog. Process restart resumes neither a command nor observation.
+Numeric units are unverified. A ±1 target does not guarantee small physical travel. Unexpected travel or coupling remains possible. The app has no verified stop command. **End observation** only ends readback. Use native controls to stop movement. Only test when able to physically inspect and restore the seat.
 
-Demo has the same confirmation/permit/readback flow with a simulated backrest value and no OEM invocation. Emulator checks validate this flow and refusal paths, not the car's setter meaning or physical behavior.
+A single-use permit freezes method, source, baseline and payload. Dispatch rechecks P/parking brake, foreground, opt-in, unchanged payload-axis readings and the original two-second request deadline. One setter invocation at most, no retry. Leaving the screen invalidates pending dispatch. Process restart never resumes a request. One process-wide worker rejects concurrent work rather than queueing commands.
+
+Private logs retain selected method/source, exact identifiers/float payload, pre-command samples, dispatch attempt, raw SDK result/failure and ten seconds of available readbacks. Result zero or matching readings do not mean physical completion. The **I used the physical control** and **I restored the native preset** markers label owner intervention; their tap times do not establish when intervention actually happened. Earlier samples may already include manual movement. Logging and observation remain bounded and private; pending memory cannot survive process death.
+
+Demo runs the confirmation, payload and readback flow using simulated values, without OEM calls. Emulator success verifies software flow only. Firmware interpretation, actual travel, cross-axis behavior and native interruption still need a parked owner trial. See [source comparison](SEAT-COMMAND-SOURCES.md).

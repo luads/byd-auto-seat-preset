@@ -107,22 +107,6 @@ internal class OemReadBridge(private val context: Context) {
     // This checks reported state only, not cache freshness. Physical confirmation is still required.
     return GearModeRead.parked(raw.first, raw.second)
   }
-  /** User-requested diagnostic exception. Exactly one backrest command, never a full recall. */
-  fun sendBackrestTest(permit:BackrestTestPermit,foreground:()->Boolean,markAttempt:()->Unit) {
-    StorageAccess.requireUnlocked(context)
-    val obj=device("setting")
-    val method=obj.javaClass.getMethod("turnSeatbackrestPercent",Int::class.javaPrimitiveType,Int::class.javaPrimitiveType)
-    check(method.returnType==Void.TYPE) { "Backrest setter signature changed" }
-    check(context.checkSelfPermission("android.permission.BYDAUTO_SETTING_SET")==android.content.pm.PackageManager.PERMISSION_GRANTED) { "Missing seat-write permission" }
-    val observed=backrest()
-    val park=rawPark()
-    val awake=(context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isInteractive
-    val state=VehicleSnapshot(if(park.first==1) Gear.P else null,if(park.second==3) true else null,null,android.os.SystemClock.elapsedRealtime())
-    // No disk I/O or another queued action between the final guard and this single invocation.
-    val target=permit.consume(android.os.SystemClock.elapsedRealtime(),observed,state,foreground() && awake,SeatControl.enabled(context))
-    markAttempt() // Memory flag only. The caller must not do I/O here.
-    method.invoke(obj,1,target)
-  }
   fun bindAxisWriter(axis: String): (Int) -> Unit {
     check(SeatWritePolicy.allowed()) { SeatWritePolicy.BLOCK_REASON }
     val methodName = when (axis) {

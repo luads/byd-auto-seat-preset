@@ -87,9 +87,9 @@ class MainActivity : ComponentActivity() {
       setPadding(dp(32), dp(40), dp(32), dp(40))
       setBackgroundColor(backgroundColor)
     }
-    val header = row()
-    header.addView(text(if (settings) "Settings" else if (demoControls) "Demo controls" else "Seat Presets", 28f), LinearLayout.LayoutParams(0, -2, 1f))
-    header.addView(action(if (settings || demoControls) "Presets" else "Settings") { if (settings || demoControls) { settings = false; demoControls = false } else settings = true; render() })
+    val header = row().apply { gravity=android.view.Gravity.CENTER_VERTICAL }
+    header.addView(text(if (settings) "Settings" else if (demoControls) "Demo controls" else "Seat Presets", 28f).apply { maxLines=1;ellipsize=android.text.TextUtils.TruncateAt.END }, LinearLayout.LayoutParams(0, -2, 1f))
+    header.addView(action(if (settings || demoControls) "Presets" else "Settings") { if (settings || demoControls) { settings = false; demoControls = false } else settings = true; render() },LinearLayout.LayoutParams(-2,-2))
     page.addView(header)
     page.addView(text(if (BuildConfig.DEMO) "DEMO · simulated vehicle, no physical movement" else "PRE-ALPHA · two favourite driving presets", 15f, mutedColor))
     if (demoControls && BuildConfig.DEMO) renderDemo() else renderPresets()
@@ -130,7 +130,7 @@ class MainActivity : ComponentActivity() {
           contentDescription = "Edit ${preset.name}"
           background = android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf(0x335AA8ED), rounded(Color.TRANSPARENT, 14), null)
           setTextColor(mutedColor)
-        })
+        },LinearLayout.LayoutParams(-2,-2))
         card.addView(heading)
         card.addView(text(if (favourites.any { it.id == preset.id }) "FAVOURITE" else "PRESET", 12f, mutedColor))
         card.addView(ImageView(this).apply {

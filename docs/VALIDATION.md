@@ -1,5 +1,15 @@
 # Pre-alpha validation
 
+## 0.1.17, 2026-10-29
+
+143 JVM tests passed in each demo/live debug/release variant. All four lint variants have zero errors; existing warnings remain. Debug and stable-signed release builds passed. New tests cover distinct single-axis/seat-batch float payloads, preserved axes, retired/collector/unknown-backend rejection, immutable permits, request expiry, opt-out, foreground and parked-state vetoes, one-use dispatch, separate write-permission setup and private-export formatting.
+
+Eight Android storage/startup/inventory integration cases passed on the Android 11 emulator. The actual demo UI passed acknowledgement gating, Cancel, one B and one C simulation, payload/readback traces, intervention markers, retired A, background invalidation and preference restoration. The smoke harness handles the ten-second observation window expiring during automation and counts only this run's trace IDs because older log entries can rotate out.
+
+Wide and narrow home checks passed at 1920×1080 and 960×720, density 240. Title, Settings, driver names and Edit no longer collapse their horizontal rows. Private screenshots stay ignored. The emulator was stopped before signed builds.
+
+No physical-car command was sent. Native SDK loading, protected permission grants, actual generic geometry, float dispatch interpretation, physical travel/coupling, native interruption and overnight behavior still require an owner-operated car check. Software compatibility checks are not a verified ECU freshness or movement contract. Normal preset loading remains blocked. See BACKREST-TEST.md.
+
 ## 0.1.16, 2026-10-26
 
 134 JVM tests passed in each demo/live debug/release variant. Debug/release lint and signed builds passed. Tests cover one-shot backrest permits, expiry, changed readings, parked-state vetoes, coordinate provenance persistence and privacy-filter-safe candidate plans. The backrest experiment is an explicit foreground owner-controlled exception to the normal recall hold. Its numeric units and physical travel remain unverified. See BACKREST-TEST.md.

@@ -5,7 +5,7 @@ Dark matte cards, editable driver names, preset backups and an optional home pan
 
 **Normal preset loading is paused.** A parked recall produced unintended travel.
 The app can open and record positions, but card, panel, child-lock and editor requests cannot
-send seat commands. A separate owner-confirmed [backrest experiment](docs/BACKREST-TEST.md) can send exactly one ±1 numeric-unit command from Developer tools. Its physical travel is unverified, it has no verified stop command, and normal preset loading stays blocked. Existing presets remain observations with unverified units, not validated
+send seat commands. Separate owner-confirmed [seat experiments](docs/BACKREST-TEST.md) compare single-axis and seat-batch float payloads from Developer tools. The former integer method is retired after coupled movement. Each experiment can send one ±1 numeric-unit backrest target only after compatibility checks and confirmation. Its physical travel is unverified, it has no verified stop command, and normal preset loading stays blocked. Existing presets remain observations with unverified units, not validated
 movement targets. Developer mode includes a private read-only saved-position inspection and an explicit vehicle-read permission setup, including the parking-brake factory permission.
 Nothing recalls a preset on startup or update. NFC identity remains unproven.
 New installs use generic Driver 1 and Driver 2 labels; names are local preferences.
