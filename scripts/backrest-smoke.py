@@ -104,6 +104,27 @@ read();seek('Back / down · 100 ms');tap('Back / down · 100 ms');acknowledge();
 end_observation();seek('Confirm observed direction and stop');tap('Confirm observed direction and stop');tap('Confirm')
 assert 'ownerConfirmedDirection axis=backrest' in log(),'Explicit direction confirmation not saved'
 snapshot('05-direction-confirmation')
+# Compare the bounded longer seat hold before returning to the default.
+top();seek('Seat pulse · 100 ms');tap('Seat pulse · 100 ms');tap('Seat pulse · 300 ms')
+read();seek('Forward / up · 300 ms');tap('Forward / up · 300 ms');acknowledge();tap('Simulate');time.sleep(1)
+assert 'pulseMs=300 kind=seat-trial' in log(),'Longer seat trial not logged'
+end_observation();top();seek('Seat pulse · 300 ms');tap('Seat pulse · 300 ms');tap('Seat pulse · 100 ms')
+# Mirror trials use SDK-declared one-shot actions, never preset loading.
+for label,button,axis,action in [('Left mirror · horizontal','Left · 100 ms','mirror.left.x',1),('Right mirror · vertical','Down · 100 ms','mirror.right.y',8)]:
+    top()
+    current='Backrest' if axis=='mirror.left.x' else 'Left mirror · horizontal'
+    seek(current);tap(current);tap(label)
+    read();seek(button);tap(button)
+    assert match('Simulate')[0].get('enabled')=='false','Mirror confirmation not gated'
+    if action==1:
+        before=count();tap('Cancel');assert count()==before,'Mirror Cancel dispatched'
+        seek(button);tap(button)
+    acknowledge();tap('Simulate');time.sleep(1)
+    assert f'axis={axis} direction=' in log() and f'action={action} release=0 pulseMs=100 kind=mirror-trial' in log(),'Wrong mirror action'
+    end_observation();seek('Confirm observed direction and stop');tap('Confirm observed direction and stop');tap('Confirm')
+    assert f'ownerConfirmedMirror axis={axis}' in log(),'Missing owner mirror result'
+    snapshot('06-'+axis)
+top();seek('Right mirror · vertical');tap('Right mirror · vertical');tap('Backrest')
 read();seek('Forward / up · 100 ms');tap('Forward / up · 100 ms');acknowledge();before=count()
 adb('shell','input','keyevent','3')
 adb('shell','am','start','-n',package+'/dev.lua.seatpreset.MainActivity');time.sleep(.3)
@@ -115,4 +136,4 @@ seek('Allow seat movement')
 if movement!='true' and pref('seat-control','enabled')=='true':tap('Allow seat movement')
 seek('Developer tools')
 if developer!='true' and pref('seat-presets-v1','developer-mode')=='true':tap('Developer tools')
-print('PASS: home, acknowledgement, cancel, native simulated pulse/release/readback, intervention rejection, mirrors read-only, six-pulse independent load, owner direction profile, background invalidation, preference restore',flush=True)
+print('PASS: home, acknowledgement, cancel, native simulated pulse/release/readback, intervention rejection, read-only mirror comparisons, six-pulse independent load, owner direction profile, 300 ms seat trial, gated left/right mirror actions and evidence-only confirmation, background invalidation, preference restore',flush=True)

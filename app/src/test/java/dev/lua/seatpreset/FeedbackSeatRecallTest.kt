@@ -10,18 +10,22 @@ class FeedbackSeatRecallTest {
     val calls=mutableListOf<Pair<String,Int>>()
     var increasing=1
     override fun increasingSignal(axis:String)=increasing
+    var releaseThrows=false
     var noFeedback=false;var reverse=false;var coupled=false;var overshoot=false;var startThrows=false;var cancelOnStart=false;var callback:(()->Unit)?=null
     override fun clock()=at
-    override fun pause(ms:Long) { at+=ms }
+    override fun pause(ms:Long) { at+=ms;pauses+=ms;pauseHook?.invoke() }
     override fun enabled()=on
     override fun active()=visible
     override fun vehicle()=VehicleSnapshot(gear,brake,null,at)
+    val audits=mutableListOf<String>()
+    val pauses=mutableListOf<Long>()
+    var pauseHook:(()->Unit)?=null
     var readHook:(()->Unit)?=null
     override fun read():Map<String,PositionFeedback.Sample> { readHook?.invoke();return values.toMap() }
-    override fun audit(detail:String) {}
+    override fun audit(detail:String) { audits+=detail }
     override fun signal(axis:String,direction:Int) {
       calls+=axis to direction
-      if(direction==0) return
+      if(direction==0) { if(releaseThrows)error("uncertain release");return }
       if(startThrows) error("uncertain start")
       if(!noFeedback) {
         val old=values.getValue(axis)
@@ -88,6 +92,31 @@ class FeedbackSeatRecallTest {
     val r=Rig();var reads=0;r.readHook={ reads++;if(reads==2)r.gear=Gear.D }
     assertThrows(IllegalStateException::class.java) { FeedbackSeatRecall.run(r,mapOf("backrest" to 50.0),1000) }
     assertTrue(r.calls.isEmpty())
+  }
+  @Test fun coarseHoldsAreBoundedAndCancellationIsCheckedWithinTheHold() {
+    val r=Rig();r.pauseHook={ r.visible=false }
+    assertThrows(IllegalStateException::class.java) { FeedbackSeatRecall.run(r,mapOf("backrest" to 70.0),1000) }
+    assertEquals(listOf("backrest" to 1,"backrest" to 0),r.calls)
+    assertEquals(listOf(25L),r.pauses)
+    assertTrue(r.audits.any { it.contains("pulseMs=300 mode=coarse-to-fine") })
+  }
+  @Test fun AdvancingTimestampWithFlatQuantizedValueStillCannotAuthorizeAnotherSignal() {
+    val r=Rig();r.noFeedback=true
+    r.readHook={ if(r.calls.isNotEmpty()) { val old=r.values.getValue("backrest");r.values=r.values+("backrest" to old.copy(cacheAtNs=old.cacheAtNs+1)) } }
+    assertThrows(IllegalStateException::class.java) { FeedbackSeatRecall.run(r,mapOf("backrest" to 70.0),1000) }
+    assertEquals(listOf("backrest" to 1,"backrest" to 0),r.calls)
+  }
+  @Test fun releaseFailureNeverStartsAnotherPulse() {
+    val r=Rig();r.releaseThrows=true
+    assertThrows(IllegalStateException::class.java) { FeedbackSeatRecall.run(r,mapOf("backrest" to 70.0),1000) }
+    assertEquals(listOf("backrest" to 1,"backrest" to 0),r.calls)
+    assertTrue(r.audits.any { it.contains("returned=false") })
+  }
+  @Test fun unchangedFeedbackNeverCausesABlindLargerRetry() {
+    val r=Rig();r.noFeedback=true
+    assertThrows(IllegalStateException::class.java) { FeedbackSeatRecall.run(r,mapOf("backrest" to 70.0),1000) }
+    assertEquals(listOf("backrest" to 1,"backrest" to 0),r.calls)
+    assertTrue(r.audits.any { it.contains("readback axis=backrest") && it.contains("changed=false") })
   }
   @Test fun unknownOrNonFiniteTargetsCannotDispatch() {
     for(target in listOf(mapOf("mirror.left.x" to 50.0),mapOf("height" to Double.NaN),mapOf("height" to 101.0))) {

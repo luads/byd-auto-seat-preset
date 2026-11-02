@@ -18,6 +18,10 @@ class BackrestTestActivity:Activity() {
   @Volatile private var generation=0
   private var trace="native-trial-"+java.util.UUID.randomUUID()
   private var selected="backrest"
+  private var duration=100L
+  private lateinit var increase:Button
+  private lateinit var decrease:Button
+  private lateinit var durationPicker:Spinner
   private var observingUntil=0L
   private var hasAttempt=false
   private var manual=false
@@ -41,7 +45,7 @@ class BackrestTestActivity:Activity() {
     fun text(value:String,size:Float=18f)=TextView(this).apply { text=value;textSize=size;setTextColor(getColor(R.color.matte_silver));setPadding(0,dp(8),0,dp(8)) }
     fun button(value:String,block:()->Unit)=Button(this).apply { text=value;isAllCaps=false;minHeight=dp(64);layoutParams=LinearLayout.LayoutParams(-1,-2).apply { topMargin=dp(6);bottomMargin=dp(6) };setOnClickListener { block() } }
     page.addView(text(if(BuildConfig.DEMO) "Seat trials · simulation" else "Seat trials",28f))
-    page.addView(text("Try one native 100 ms pulse, then check readback and physical stop. Keep native controls ready. Trials are optional; preset loading is enabled."))
+    page.addView(text("Try one seat pulse or a confirmed mirror tilt trial, then check readback and physical stop. Keep native controls ready. Trials are optional; preset loading is enabled."))
     val wide=resources.configuration.screenWidthDp>=900
     val columns=LinearLayout(this).apply { orientation=if(wide) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL }
     val actions=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL }
@@ -52,13 +56,21 @@ class BackrestTestActivity:Activity() {
     } else { columns.addView(actions);columns.addView(details) }
     page.addView(columns)
     actions.addView(Spinner(this).apply {
-      adapter=ArrayAdapter(this@BackrestTestActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Backrest","Fore/aft","Height"))
+      adapter=ArrayAdapter(this@BackrestTestActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Backrest","Fore/aft","Height")+MirrorTrialCommand.labels)
       minimumHeight=dp(60);controls+=this
       onItemSelectedListener=object:AdapterView.OnItemSelectedListener {
-        override fun onItemSelected(parent:AdapterView<*>?,view:View?,position:Int,id:Long) { val axis=listOf("backrest","horizontal","height")[position];if(axis!=selected) { selected=axis;observed=false;hasAttempt=false;pulseBefore=null;pulseAfter=null;output.text="Read $selected before testing.";update() } }
+        override fun onItemSelected(parent:AdapterView<*>?,view:View?,position:Int,id:Long) { val axis=(listOf("backrest","horizontal","height")+MirrorTrialCommand.axes)[position];if(axis!=selected) { selected=axis;observed=false;hasAttempt=false;pulseBefore=null;pulseAfter=null;output.text="Read $selected before testing.";update() } }
         override fun onNothingSelected(parent:AdapterView<*>?) {}
       }
     })
+    durationPicker=Spinner(this).apply {
+      adapter=ArrayAdapter(this@BackrestTestActivity,android.R.layout.simple_spinner_dropdown_item,listOf("Seat pulse · 100 ms","Seat pulse · 200 ms","Seat pulse · 300 ms"))
+      minimumHeight=dp(60);controls+=this
+      onItemSelectedListener=object:AdapterView.OnItemSelectedListener {
+        override fun onItemSelected(parent:AdapterView<*>?,view:View?,position:Int,id:Long) { duration=listOf(100L,200L,300L)[position];update() }
+        override fun onNothingSelected(parent:AdapterView<*>?) {}
+      }
+    };actions.addView(durationPicker)
     val setup=button("Set up seat access") {
       AlertDialog.Builder(this).setTitle("Grant native seat access?")
         .setMessage("Grant missing read access and this app's SETTING_SET permission through the local setup connection. No movement, native preset change or automatic recall. The movement toggle remains separate.")
@@ -68,14 +80,14 @@ class BackrestTestActivity:Activity() {
     };actions.addView(setup);controls+=setup
     val read=button("Read seat and mirror positions") { readPositions() };actions.addView(read);controls+=read
     val row=LinearLayout(this)
-    val increase=button("Forward / up · 100 ms") { confirm(1) }
-    val decrease=button("Back / down · 100 ms") { confirm(2) }
+    increase=button("Forward / up · 100 ms") { confirm(1) }
+    decrease=button("Back / down · 100 ms") { confirm(2) }
     increase.tag="pulse";decrease.tag="pulse";controls+=increase;controls+=decrease
     row.addView(increase,LinearLayout.LayoutParams(0,-2,1f).apply { marginEnd=dp(10) });row.addView(decrease,LinearLayout.LayoutParams(0,-2,1f));actions.addView(row)
     actions.addView(button("Stop / cancel") { generation++;SeatMotionState.cancel();endObservation() })
     val mirrors=button("Compare mirror read routes") { compareMirrors() };actions.addView(mirrors);controls+=mirrors
     if(BuildConfig.DEMO) { val simulate=button("Simulate a saved seat load") { simulateLoad() };actions.addView(simulate);controls+=simulate }
-    output=text("Read first. Seat and mirror data stays in the private report and can be sent through ADB Lab. Only the backrest forward/release path has an owner-confirmed field result so far.",19f);details.addView(output)
+    output=text("Read first. Seat and mirror data stays in the private report and can be sent through ADB Lab. Seat trials and one recorded three-axis load have owner evidence. Mirror tilt and its release still need physical confirmation.",19f);details.addView(output)
     physical=button("I used a physical control") { mark("physical-control") };details.addView(physical)
     restored=button("I restored my native preset") { mark("native-preset-restored") };details.addView(restored)
     directionConfirm=button("Confirm observed direction and stop") { confirmDirection() };details.addView(directionConfirm)
@@ -87,6 +99,11 @@ class BackrestTestActivity:Activity() {
     if(!::output.isInitialized) return
     val ready=active && !busy.get() && observingUntil==0L
     controls.forEach { it.isEnabled=ready && (it.tag!="pulse" || observed) }
+    val mirror=selected in MirrorTrialCommand.axes
+    durationPicker.isEnabled=ready && !mirror
+    val ms=if(mirror) 100L else duration
+    increase.text=(if(mirror) (if(selected.endsWith(".x")) "Left" else "Up") else "Forward / up")+" · $ms ms"
+    decrease.text=(if(mirror) (if(selected.endsWith(".x")) "Right" else "Down") else "Back / down")+" · $ms ms"
     physical.isEnabled=hasAttempt;restored.isEnabled=hasAttempt
     end.visibility=if(observingUntil>0) View.VISIBLE else View.GONE
     directionConfirm.isEnabled=active && !busy.get() && !manual && pulseBefore!=null && pulseAfter!=null
@@ -114,43 +131,54 @@ class BackrestTestActivity:Activity() {
     start("Reading typed positions…") {
       val data=read();log("before",data)
       main.post { if(active) { observed=true;update() } }
-      data.entries.joinToString("\n") { (axis,sample)->"$axis: ${sample.value} · cache ${sample.cacheAtNs}" }+"\nRead time is not proof of fresh ECU data. Mirrors will not be moved."
+      data.entries.joinToString("\n") { (axis,sample)->"$axis: ${sample.value} · cache ${sample.cacheAtNs}" }+"\nRead time is not proof of fresh ECU data. Reading sends no movement command."
     }
   }
   private fun confirm(direction:Int) {
     if(!observed || busy.get() || !active) return
     val axis=selected;val token=generation
+    val mirror=axis in MirrorTrialCommand.axes
+    val ms=if(mirror) 100L else duration
+    val command=if(mirror) "Mirror tilt $axis · SDK action ${MirrorTrialCommand.action(axis,direction)}. Stop=0 is a trial candidate, not a physically validated stop. No fold or preset command." else "Driver $axis · native signal $direction. No percentage target or native-bank change."
     val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL;setPadding(dp(20),dp(10),dp(20),dp(10)) }
-    root.addView(TextView(this).apply { text="Driver $axis · native signal $direction, then release=0 after a nominal 100 ms. Physical travel, other directions and axes remain experimental. No percentage target, native-bank change or mirror command. Native controls must remain within reach.";textSize=18f })
+    root.addView(TextView(this).apply { text="$command Release is attempted after a nominal $ms ms. Keep native controls ready. Confirm the actual movement and stopping behavior; SDK returns are not physical proof.";textSize=18f })
     val check=CheckBox(this).apply { text="I am in P, parking brake applied, with clearance and native controls ready.";minHeight=dp(64) };root.addView(check)
     val dialog=AlertDialog.Builder(this).setTitle(if(BuildConfig.DEMO) "Simulate one pulse?" else "Run one native pulse?")
       .setView(ScrollView(this).apply { addView(root) }).setNegativeButton("Cancel",null)
-      .setPositiveButton(if(BuildConfig.DEMO) "Simulate" else "Move once") { _,_->if(active && token==generation && check.isChecked) pulse(axis,direction) }.create()
+      .setPositiveButton(if(BuildConfig.DEMO) "Simulate" else "Move once") { _,_->if(active && token==generation && check.isChecked) pulse(axis,direction,ms) }.create()
     dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled=false;check.setOnCheckedChangeListener { _,on->dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled=on } };dialog.show()
   }
-  private fun pulse(axis:String,direction:Int) {
+  private fun pulse(axis:String,direction:Int,ms:Long) {
     val requestedAt=SystemClock.elapsedRealtime();val token=generation;observed=false;hasAttempt=true
     start("Checking P, brake and native access…") {
       check(SeatMotionState.operations.beginMotion()) { "Another seat load or trial is running" }
       try {
-        val before=read();pulseBefore=before;pulseAfter=null;pulseAxis=axis;pulseDirection=direction;manual=false;log("before-pulse",before)
+        val mirror=axis in MirrorTrialCommand.axes
+        require(ms in listOf(100L,200L,300L) && (!mirror || ms==100L))
+        val before=read();if(mirror) MirrorTrialCommand.requireFeedback(axis,before)
+        pulseBefore=before;pulseAfter=null;pulseAxis=axis;pulseDirection=direction;manual=false;log("before-pulse",before)
         val sdk=if(BuildConfig.DEMO) null else FeedbackOemBridge(applicationContext,trace)
         sdk.use {
-          it?.prepareSignals()
+          if(mirror) it?.prepareMirrorTrial() else it?.prepareSignals()
           check(SeatControl.enabled(this)) { "Enable Seat movement first" }
           RecallPolicy.blockReason(state(),SystemClock.elapsedRealtime())?.let { reason->error(reason) }
           check(active && token==generation && SystemClock.elapsedRealtime()-requestedAt<=RecallPolicy.MAX_AGE_MS) { "Trial cancelled or request expired" }
-          SeatDiagnostics.event(this,trace,"ownerConfirmed=true nativeSignal axis=$axis direction=$direction release=0 pulseMs=100 driverArea=1")
+          SeatDiagnostics.event(this,trace,"ownerConfirmed=true nativeSignal axis=$axis direction=$direction action=${if(mirror) MirrorTrialCommand.action(axis,direction) else direction} release=0 pulseMs=$ms kind=${if(mirror) "mirror-trial" else "seat-trial"}")
           // Logging is complete before the final P/foreground check and signal.
           RecallPolicy.blockReason(state(),SystemClock.elapsedRealtime())?.let { reason->error(reason) }
           check(active && token==generation && SeatControl.enabled(this)) { "Trial cancelled" }
           val at=SystemClock.elapsedRealtime()
           try {
             if(BuildConfig.DEMO) synchronized(demo) { val old=demo.getValue(axis);demo[axis]=PositionFeedback.Sample(old.value+if(direction==1) 1 else -1,old.cacheAtNs+1) }
-            else it!!.signal(axis,direction)
-            Thread.sleep(FeedbackSeatRecall.PULSE_MS)
+            else if(mirror) it!!.mirrorTrialSignal(axis,direction) else it!!.signal(axis,direction)
+            val heldAt=SystemClock.elapsedRealtime()
+            while(SystemClock.elapsedRealtime()-heldAt<ms) {
+              Thread.sleep(minOf(25L,(ms-(SystemClock.elapsedRealtime()-heldAt)).coerceAtLeast(1L)))
+              check(active && token==generation && SeatControl.enabled(this)) { "Trial cancelled" }
+              RecallPolicy.blockReason(state(),SystemClock.elapsedRealtime())?.let { reason->error(reason) }
+            }
           } finally {
-            val released=runCatching { it?.signal(axis,0) }
+            val released=runCatching { if(mirror) it?.mirrorTrialSignal(axis,0) else it?.signal(axis,0) }
             SeatDiagnostics.event(this,trace,"nativeRelease axis=$axis attempted=true returned=${released.isSuccess} elapsedMs=${SystemClock.elapsedRealtime()-at} physicalStop=owner-check")
             released.getOrThrow()
           }
@@ -187,6 +215,16 @@ class BackrestTestActivity:Activity() {
     if(manual || busy.get()) return
     val before=pulseBefore ?: return
     val after=pulseAfter ?: return
+    if(pulseAxis in MirrorTrialCommand.axes) {
+      val usable=runCatching { MirrorTrialCommand.changedOnlySelected(pulseAxis,before,after) }.getOrDefault(false)
+      if(!usable) { output.text="Mirror evidence is unchanged, missing or coupled. No direction is saved.";return }
+      AlertDialog.Builder(this).setTitle("Confirm mirror movement and stop?")
+        .setMessage("Confirm only the selected mirror direction moved briefly and stopped by itself, without physical intervention. This records evidence only. Mirrors remain excluded from preset loading.")
+        .setNegativeButton("Cancel",null).setPositiveButton("Confirm") { _,_->
+          SeatDiagnostics.event(this,trace,"ownerConfirmedMirror axis=$pulseAxis action=${MirrorTrialCommand.action(pulseAxis,pulseDirection)} before=$before after=$after physicalStop=owner-confirmed presetEnabled=false")
+          output.text="Mirror result recorded privately. Mirror preset loading remains off."
+        }.show();return
+    }
     val inferred=runCatching { SeatSignalProfile.infer(pulseAxis,pulseDirection,before,after) }.getOrElse { output.text="Direction not usable: ${it.message}";return }
     AlertDialog.Builder(this).setTitle("Confirm $pulseAxis behavior?")
       .setMessage("Confirm only the selected seat axis moved briefly and stopped by itself, with no physical intervention. Signal $inferred will mean a higher saved coordinate on this firmware. This changes no saved coordinates and sends no command.")

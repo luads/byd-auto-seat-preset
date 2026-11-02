@@ -1,6 +1,6 @@
 # Capture and recall validation plan
 
-Current status: 0.1.18 enables the owner-requested native-signal feedback loader, with explicit movement opt-in and reported P/EPB checks. The old percentage route remains retired. One driver-backrest forward/release pulse has physical confirmation; complete loading, reverse and other axes remain experimental. Independent captures need the new typed format. Mirror feedback can be recorded and compared read-only; no mirror movement is sent. See SEAT-RECALL-CONTRACT.md and BACKREST-TEST.md.
+Current status: 0.1.19 adds bounded coarse-to-fine seat timing and explicit mirror tilt trials. The owner reports successful short seat trials and eventual loading; retained logs contain one complete three-axis match after four no-change aborts. New hold timing and mirror start/release behavior still need parked owner checks. Existing 0.1.18 captures remain valid. Mirrors remain excluded from preset recall. See SEAT-RECALL-CONTRACT.md and BACKREST-TEST.md.
 
 The emulator checks storage and controller behavior. It cannot prove that an OEM getter reports actual coordinates, that a setter affects the intended seat, or that a real movement stops safely.
 

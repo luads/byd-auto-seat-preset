@@ -415,7 +415,7 @@ class MainActivity : ComponentActivity() {
   private fun captureLive(preset: Preset) {
     if (captureBusy) return
     AlertDialog.Builder(this).setTitle("Save current position for ${preset.name}?")
-      .setMessage(if (preset.position == null) "Park in P. Saves independent seat coordinates and available mirror readings. Mirror movement is not enabled." else "Park in P. Replace this independent seat position and available mirror readings?")
+      .setMessage(if (preset.position == null) "Park in P. Saves independent seat coordinates and available mirror readings. Preset loading does not move mirrors." else "Park in P. Replace this independent seat position and available mirror readings?")
       .setNegativeButton("Cancel", null).setPositiveButton("Save") { _, _ ->
         captureBusy = true; val session = captureSession
         toast("Saving position…")

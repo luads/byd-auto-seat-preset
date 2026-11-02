@@ -5,6 +5,8 @@ import kotlin.math.abs
 /** Bounded independent-coordinate loading through native momentary signals, never percentage writes. */
 internal object FeedbackSeatRecall {
   const val PULSE_MS=100L
+  const val MAX_PULSE_MS=300L
+  const val GUARD_STEP_MS=25L
   const val MAX_RUN_MS=30_000L
   const val MAX_PULSES=48
   const val MAX_AXIS_PULSES=24
@@ -41,6 +43,8 @@ internal object FeedbackSeatRecall {
     guard()
     for(axis in PositionFeedback.seatAxes.filter { it in target }) {
       var count=0
+      var fastestRate=0.02 // Candidate units/ms, conservative floor above the observed average.
+      var largestStep=2.0
       while(true) {
         guard()
         val frameBefore=current.toMap()
@@ -49,32 +53,46 @@ internal object FeedbackSeatRecall {
         val error=wanted-before.value
         if(abs(error)<=TOLERANCE) break
         check(pulses<MAX_PULSES && count<MAX_AXIS_PULSES) { "Seat signal limit reached before matching $axis" }
+        val duration=SeatPulseTiming.duration(abs(error),fastestRate,largestStep)
         val direction=if(error>0) increasing.getValue(axis) else 3-increasing.getValue(axis)
-        port.audit("prepare axis=$axis from=${before.value} target=$wanted signal=$direction release=0 pulseMs=$PULSE_MS cacheAtNs=${before.cacheAtNs}")
+        port.audit("prepare axis=$axis from=${before.value} target=$wanted signal=$direction release=0 pulseMs=$duration mode=coarse-to-fine cacheAtNs=${before.cacheAtNs}")
         guard()
         if(acceptedAt==null) acceptedAt=port.clock()
         pulses++;count++;moved+=axis
         // A release is attempted even when start throws. No retry, fallback, or opposite correction.
         var releaseFailure:Throwable?=null
+        val signalAt=port.clock()
         try {
           port.signal(axis,direction)
-          port.pause(PULSE_MS)
+          val heldAt=port.clock()
+          while(port.clock()-heldAt<duration) {
+            val remaining=duration-(port.clock()-heldAt)
+            if(remaining<=0) break
+            port.pause(minOf(GUARD_STEP_MS,remaining))
+            guard()
+          }
         } finally {
           try { port.signal(axis,0) } catch(error:Throwable) { releaseFailure=error }
-          port.audit("release axis=$axis requested=true returned=${releaseFailure==null} physicalStop=unverified")
+          port.audit("release axis=$axis requested=true returned=${releaseFailure==null} elapsedMs=${port.clock()-signalAt} plannedMs=$duration physicalStop=unverified")
           releaseFailure?.let { throw it }
         }
         guard()
-        port.pause(100) // Brief settling interval; no signal remains intentionally held here.
         val releasedAt=port.clock()
         var after:PositionFeedback.Sample?=null
+        var reads=0
         while(port.clock()-releasedAt<=FEEDBACK_WAIT_MS) {
           guard()
-          current=port.read()
+          val readAt=port.clock()
+          current=port.read();reads++
           guard()
-          check(port.clock()-releasedAt<=FEEDBACK_WAIT_MS) { "Seat feedback arrived after its deadline. Load stopped." }
           val reading=current[axis]
-          if(reading!=null && reading.cacheAtNs>before.cacheAtNs && reading.value!=before.value) { after=reading;break }
+          val changed=reading!=null && reading.cacheAtNs>before.cacheAtNs && reading.value!=before.value
+          port.audit("readback axis=$axis attempt=$reads readMs=${port.clock()-readAt} sinceReleaseMs=${port.clock()-releasedAt} changed=$changed raw=${reading?.value} cacheAtNs=${reading?.cacheAtNs}")
+          if(port.clock()-releasedAt>FEEDBACK_WAIT_MS) {
+            check(!changed) { "Feedback arrived after its deadline. No further signal was sent." }
+            break
+          }
+          if(changed) { after=reading;break }
           port.pause(100)
         }
         val updated=checkNotNull(after) { "No advancing $axis feedback after release. Load stopped." }
@@ -82,6 +100,8 @@ internal object FeedbackSeatRecall {
         port.audit("feedback axis=$axis before=${before.value} after=${updated.value} target=$wanted cacheAtNs=${updated.cacheAtNs} completion=unverified")
         check(abs(next)<abs(error)) { "$axis did not move toward its target. Load stopped. Check its direction in Seat trials." }
         check(abs(next)<=TOLERANCE || error*next>0) { "$axis passed its target. No reverse correction was sent." }
+        fastestRate=maxOf(fastestRate,abs(updated.value-before.value)/duration)
+        largestStep=maxOf(largestStep,abs(updated.value-before.value))
         check(PositionFeedback.seatAxes.filter { it!=axis }.all { other -> current[other]?.value==frameBefore[other]?.value }) { "Another seat axis changed. Load stopped." }
       }
     }

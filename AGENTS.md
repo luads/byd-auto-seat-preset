@@ -2,7 +2,7 @@
 
 Read README.md before editing. This repository is the new preset app, not the private ADB lab.
 
-- Keep demo and live package IDs separate. The owner authorized experimental independent seat loading through the typed-feedback/native-signal contract in docs/SEAT-RECALL-CONTRACT.md. Keep the movement opt-in and interlocks. Absolute percentage writers remain retired; mirror probes remain read-only. One backrest forward/release has physical confirmation, not a complete multi-axis contract.
+- Keep demo and live package IDs separate. The owner authorized experimental independent seat loading through the typed-feedback/native-signal contract in docs/SEAT-RECALL-CONTRACT.md. Keep the movement opt-in and interlocks. Absolute percentage writers remain retired; mirror preset loading stays off. Only explicit, confirmed mirror tilt trials may write mirrors. The owner reports eventual seat loading and short trials worked; complete accuracy and new timing/mirror behavior remain unvalidated.
 - Both app and widget recalls use the same controller. Two distinct favourites must remain directly tappable.
 - Require fresh P and parking-brake evidence for recall. Speed is a veto, never proof of stillness. These are proposed conditions, not a validated physical interlock.
 - Never persist or replay a movement request after restart, blocked eligibility, or an update.

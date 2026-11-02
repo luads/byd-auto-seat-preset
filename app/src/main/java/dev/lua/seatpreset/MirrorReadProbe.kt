@@ -10,7 +10,7 @@ internal object MirrorReadProbe {
     Route("mirror.right.x",2,"getRearviewMirrorX",2130,0x4BB00110),Route("mirror.right.y",2,"getRearviewMirrorY",2132,0x4BB00118))
   fun read(context:Context,trace:String):String {
     StorageAccess.requireUnlocked(context)
-    val output=mutableListOf("Read-only comparison. SDK defaults are not saved coordinates. Mirror movement is not enabled.")
+    val output=mutableListOf("Read-only comparison. SDK defaults are not saved coordinates. Mirror preset loading is off. This comparison sends no command.")
     fun add(line:String) { output+=line;SeatDiagnostics.event(context,trace,line) }
     fun typed(stage:String) {
       runCatching { FeedbackOemBridge(context,trace).use { it.read() } }.fold({ frame ->

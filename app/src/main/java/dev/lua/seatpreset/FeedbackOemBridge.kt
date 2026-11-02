@@ -25,6 +25,22 @@ internal class FeedbackOemBridge(private val context:Context,private val trace:S
       device.javaClass.getMethod(name,Int::class.javaPrimitiveType,Int::class.javaPrimitiveType).also { check(it.returnType==Void.TYPE) { "Native signal signature changed" } }
     }
   }
+  private val mirrorSetter by lazy {
+    StorageAccess.requireUnlocked(context)
+    check(context.checkSelfPermission("android.permission.BYDAUTO_SETTING_SET")==PackageManager.PERMISSION_GRANTED) { "Missing native movement access" }
+    val constants=Class.forName("android.hardware.bydauto.bodywork.BYDAutoBodyworkDevice",false,loader)
+    MirrorTrialCommand.constants.forEach { (name,value)->check(constants.getField(name).getInt(null)==value) { "Mirror action mapping changed" } }
+    device.javaClass.getMethod("turnRearviewMirror",Int::class.javaPrimitiveType).also { check(it.returnType==Void.TYPE) { "Mirror signal signature changed" } }
+  }
+  fun prepareMirrorTrial() {
+    val method=mirrorSetter
+    SeatDiagnostics.event(context,trace,"mirrorTrialBinding receiver=${device.javaClass.name} method=${method.name} property=0x21403b74 releaseCandidate=0 physicalStop=unverified foldCommands=false presetRecall=false")
+  }
+  fun mirrorTrialSignal(axis:String,direction:Int) {
+    val action=MirrorTrialCommand.action(axis,direction)
+    if(direction!=0) { StorageAccess.requireUnlocked(context);check(SeatControl.enabled(context)) { "Enable movement first" } }
+    mirrorSetter.invoke(device,action)
+  }
   fun prepareSignals() {
     val bound=setters
     SeatDiagnostics.event(context,trace,"nativeBindings receiver=${device.javaClass.name} driverArea=1 methods="+bound.mapValues { it.value.name }+" absoluteWrites=false")

@@ -1,5 +1,15 @@
 # Pre-alpha validation
 
+## 0.1.19, 2026-11-02
+
+178 JVM tests passed in each demo/live debug/release variant, with zero failures. All four lint variants have zero errors; required debug and stable-signed release builds passed. Tests cover 100–300 ms timing limits, target reserve/rate effects, a duration-aware quantized simulation with fewer stops, no feedback reads while held, cancellation inside a hold, uncertain release, flat values with advancing timestamps, no blind retry, all eight mirror tilt actions, rejected unknown/fold axes, complete valid seven-field prerequisites, and selected-only mirror evidence. The real private seven-field capture still parses.
+
+All nine Android integration cases passed on the Android 11 emulator using the stable-signed live APK, including the tokenless trusted-Lab transfer. A synthetic mirror-trial movement record was retained in the one-use export and imported privately. No Telegram delivery was triggered.
+
+The actual demo UI passed confirmation gating and Cancel, a 100 ms seat pulse/readback, intervention rejection, a six-pulse saved-load simulation, seat direction confirmation, the 300 ms seat option, left-horizontal and right-vertical mirror actions, mirror evidence-only confirmation, background invalidation and preference restoration. Other mirror direction codes are covered by the pure mapping tests, not a physical trial. Wide screenshots were inspected and stay ignored/private. The emulator was stopped before release delivery to free RAM.
+
+Both supplied log files match their manifest hashes. Their retained overlapping history shows four unchanged-feedback aborts before one full three-axis match and two already-matched requests. The owner reports trials and eventual loading worked. New timing and mirror movement/release still need parked owner validation; only the emulator was accessed for this update. Mirror stop=0 is a candidate, not a verified motor stop. Mirrors remain excluded from preset loading, and existing 0.1.18 captures need no new recording. No phone identity or automatic actuation was enabled.
+
 ## 0.1.18, 2026-10-30
 
 167 JVM tests passed in each demo/live debug/release variant. All four lint variants have zero errors; existing warnings remain. Required debug builds and stable-signed release builds passed. The parser also accepted the private seven-axis capture from the owner car, without committing its values. Tests cover typed/status-bearing zero versus fallback/sentinel, ambiguous and wrong-type feedback, legacy rejection, bounded signals, release on failure, expired requests, cancellation/P/brake/opt-out loss, late reads, wrong direction, coupling, overshoot, explicit direction profiles, motion/update exclusion and the bounded private Lab envelope.

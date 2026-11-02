@@ -1,4 +1,4 @@
-> Version 0.1.18 enables experimental independent-coordinate seat loading with native signals and typed feedback. See [BACKREST-TEST.md](BACKREST-TEST.md) and [SEAT-RECALL-CONTRACT.md](SEAT-RECALL-CONTRACT.md). Mirror movement is off. The older procedure below is historical.
+> Version 0.1.19 uses bounded coarse-to-fine seat timing, retaining valid 0.1.18 captures. See [BACKREST-TEST.md](BACKREST-TEST.md) and [SEAT-RECALL-CONTRACT.md](SEAT-RECALL-CONTRACT.md). Mirror preset loading is off; explicit confirmed mirror tilt trials are separate. The older procedure below is historical.
 
 # Owner-operated saved presets, 0.1.12
 
