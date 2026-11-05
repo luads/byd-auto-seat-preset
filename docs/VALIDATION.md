@@ -1,5 +1,13 @@
 # Pre-alpha validation
 
+## 0.1.20, 2026-11-06
+
+184 JVM tests passed in each demo/live debug/release variant. Required debug builds and debug lint passed. Both stable-signed release builds passed; release lint has zero errors. Both actual APKs have the expected package, version 0.1.20/code 21 and established signing certificate, and are not debuggable. New cases cover every pause option across axis boundaries, feedback time counting toward the minimum, cancellation/park loss/opt-out during waiting, slow safety checks, changed positions during an added wait, no blind retry, invalid pause choices and already-matched targets.
+
+The Android 11 demo UI rendered all seven options, persisted a selection across process restart and used the stored 300 ms value during a complete simulated load. The original timing preference was restored. Screenshots stay private because the existing emulator contains personal preference labels. The emulator was closed after checking. No physical vehicle was accessed.
+
+The supplied diagnostic file passed its manifest hash check. Its newest retained activity is November 3, despite the later export timestamp. The new timing, missed-feedback cause and mirror direction/release remain owner-operated car checks. No mirror preset loading or identity-triggered movement was enabled.
+
 ## 0.1.19, 2026-11-02
 
 178 JVM tests passed in each demo/live debug/release variant, with zero failures. All four lint variants have zero errors; required debug and stable-signed release builds passed. Tests cover 100–300 ms timing limits, target reserve/rate effects, a duration-aware quantized simulation with fewer stops, no feedback reads while held, cancellation inside a hold, uncertain release, flat values with advancing timestamps, no blind retry, all eight mirror tilt actions, rejected unknown/fold axes, complete valid seven-field prerequisites, and selected-only mirror evidence. The real private seven-field capture still parses.

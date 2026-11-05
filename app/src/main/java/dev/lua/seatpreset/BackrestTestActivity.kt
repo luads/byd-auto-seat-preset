@@ -259,7 +259,7 @@ class BackrestTestActivity:Activity() {
         override fun signal(axis:String,direction:Int) { if(direction!=0) synchronized(demo) { val old=demo.getValue(axis);demo[axis]=PositionFeedback.Sample(old.value+if(direction==1) 1 else -1,old.cacheAtNs+1) } }
         override fun audit(detail:String)=SeatDiagnostics.event(this@BackrestTestActivity,trace,"simulation $detail")
       }
-      val result=FeedbackSeatRecall.run(port,target,requested)
+      val result=FeedbackSeatRecall.run(port,target,requested,SeatControl.minimumPauseMs(this))
       "Simulated saved seat matched after ${result.pulses} pulses. No OEM command."
     }
   }

@@ -52,7 +52,7 @@ internal class LiveVehicle(private val context:Context,private val selectedAxes:
             SeatDiagnostics.event(context,trace,detail+" sampledAtMs="+clock())
           }
         }
-        val outcome=FeedbackSeatRecall.run(port,target,requestedAt)
+        val outcome=FeedbackSeatRecall.run(port,target,requestedAt,SeatControl.minimumPauseMs(context))
         val mirrors=position.coordinates.keys.any { it.startsWith("mirror.") }
         resultMessage="Seat feedback matches the preset"+(if(mirrors) ". Mirrors were recorded but not moved." else ".")
         SeatDiagnostics.event(context,trace,"feedbackMatch=true pulses=${outcome.pulses} axes=${outcome.axes} mirrorCommands=0 physicalCompletion=owner-check")

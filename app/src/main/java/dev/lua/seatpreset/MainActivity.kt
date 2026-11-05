@@ -222,7 +222,7 @@ class MainActivity : ComponentActivity() {
       releaseVersion=release?.versionName,developer=store.developerMode,
       canExport=Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/json").addCategory(Intent.CATEGORY_OPENABLE).resolveActivity(packageManager)!=null,
       canImport=Intent(Intent.ACTION_OPEN_DOCUMENT).setType("*/*").addCategory(Intent.CATEGORY_OPENABLE).resolveActivity(packageManager)!=null,
-      demo=BuildConfig.DEMO,version=BuildConfig.VERSION_NAME)
+      demo=BuildConfig.DEMO,version=BuildConfig.VERSION_NAME,minimumPauseMs=SeatControl.minimumPauseMs(this))
     if(settingsView==null) {
       settingsView=ComposeView(this).apply {
         id=R.id.settings_compose
@@ -238,6 +238,7 @@ class MainActivity : ComponentActivity() {
         is SettingsAction.Rename -> { require(action.name.isNotBlank() && action.name.length<=24);store.save(store.all().map { if(it.id==action.id) it.copy(name=action.name) else it });changed() }
         is SettingsAction.Favourite -> { val preset=store.all().first { it.id==action.id };store.setFavourite(action.slot,preset);changed() }
         is SettingsAction.Bind -> { val preset=action.id?.let { id->store.all().first { it.id==id } };ChildBindings(this).assign(action.side,preset);render() }
+        is SettingsAction.CommandPause -> { SeatControl.setMinimumPauseMs(this,action.ms);render() }
         is SettingsAction.PanelWidth -> { PanelPlacement.setWidth(this,action.width);render() }
         is SettingsAction.Toggle -> settingsToggleAction(action.setting,action.enabled)
         is SettingsAction.Command -> settingsCommand(action.command)

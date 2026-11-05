@@ -24,12 +24,15 @@ internal object FeedbackSeatRecall {
     fun audit(detail:String)
   }
   data class Outcome(val pulses:Int,val axes:Set<String>)
-  fun run(port:Port,target:Map<String,Double>,requestedAt:Long):Outcome {
+  fun run(port:Port,target:Map<String,Double>,requestedAt:Long,minimumPauseMs:Long=0L):Outcome {
+    require(SeatCommandPause.valid(minimumPauseMs))
     require(target.isNotEmpty() && target.keys.all { it in PositionFeedback.seatAxes } && target.values.all { it.isFinite() && it in 0.0..100.0 })
     val increasing=target.keys.associateWith { port.increasingSignal(it).also { signal -> require(signal in 1..2) { "Invalid native direction profile" } } }
     var pulses=0
     val moved=linkedSetOf<String>()
     var acceptedAt:Long?=null
+    var lastReleaseAt:Long?=null
+    port.audit("timing minimumPauseMs=$minimumPauseMs basis=release-to-next-signal feedbackTimeCounts=true")
     fun guard() {
       check(port.enabled() && port.active()) { "Seat load cancelled, movement disabled or control surface closed" }
       val state=port.vehicle();val now=port.clock()
@@ -47,6 +50,26 @@ internal object FeedbackSeatRecall {
       var largestStep=2.0
       while(true) {
         guard()
+        val previousRelease=lastReleaseAt
+        if(previousRelease!=null && abs(target.getValue(axis)-checkNotNull(current[axis]).value)>TOLERANCE) {
+          val waitStarted=port.clock()
+          var waited=false
+          while(port.clock()-previousRelease<minimumPauseMs) {
+            guard()
+            val remaining=minimumPauseMs-(port.clock()-previousRelease)
+            if(remaining<=0) break
+            waited=true
+            port.pause(minOf(GUARD_STEP_MS,remaining))
+          }
+          guard()
+          if(waited) {
+            val refreshed=port.read()
+            guard()
+            check(PositionFeedback.seatAxes.all { refreshed[it]?.value==current[it]?.value }) { "Seat feedback changed during the command pause. Load stopped." }
+            current=refreshed
+          }
+          port.audit("command-gap axis=$axis minimumPauseMs=$minimumPauseMs waitedMs=${port.clock()-waitStarted} sinceReleaseMs=${port.clock()-previousRelease}")
+        }
         val frameBefore=current.toMap()
         val before=checkNotNull(current[axis]) { "Missing $axis feedback" }
         val wanted=target.getValue(axis)
@@ -78,6 +101,7 @@ internal object FeedbackSeatRecall {
         }
         guard()
         val releasedAt=port.clock()
+        lastReleaseAt=releasedAt
         var after:PositionFeedback.Sample?=null
         var reads=0
         while(port.clock()-releasedAt<=FEEDBACK_WAIT_MS) {

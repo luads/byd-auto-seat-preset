@@ -30,7 +30,7 @@ internal data class SettingsUiState(
   val panelWidth:Int,val panelMessage:String,val panelBusy:Boolean,val childEnabled:Boolean,val leftPresetId:String?,val rightPresetId:String?,
   val startupEnabled:Boolean,val startupGranted:Boolean,val startupStatus:String,
   val checkOnStart:Boolean,val autoUpdates:Boolean,val autoUpdateStatus:String?,val updateMessage:String,val updateBusy:Boolean,
-  val releaseVersion:String?,val developer:Boolean,val canExport:Boolean,val canImport:Boolean,val demo:Boolean,val version:String,
+  val releaseVersion:String?,val developer:Boolean,val canExport:Boolean,val canImport:Boolean,val demo:Boolean,val version:String,val minimumPauseMs:Long=SeatCommandPause.DEFAULT_MS,
 )
 internal enum class SettingsToggle { MOVEMENT, HOME, CHILD, STARTUP, CHECK_UPDATES, AUTO_UPDATES, DEVELOPER }
 internal enum class SettingsCommand { BACK, SETUP_HOME, RESET_PANEL, CAR_STARTUP, CHECK_UPDATES, INSTALL, INSTALLER, INSPECT,
@@ -41,6 +41,7 @@ internal sealed interface SettingsAction {
   data class Rename(val id:String,val name:String):SettingsAction
   data class Favourite(val slot:Int,val id:String):SettingsAction
   data class Bind(val side:ChildSide,val id:String?):SettingsAction
+  data class CommandPause(val ms:Long):SettingsAction
   data class PanelWidth(val width:Int):SettingsAction
 }
 private sealed interface SettingsDialog {
@@ -173,6 +174,19 @@ internal fun SeatSettingsScreen(state:SettingsUiState,onAction:(SettingsAction)-
     }
     if(state.movementPaused) Text("The previous command path is blocked. Your choice is saved.",fontSize=15.sp,color=Color(0xFFE5B765),lineHeight=21.sp)
     else Caption("Requires P and the parking brake.")
+    if(state.developer) {
+      var expanded by remember { mutableStateOf(false) }
+      Box {
+        TonalAction("Minimum command pause · ${state.minimumPauseMs} ms",Modifier.fillMaxWidth()) { expanded=true }
+        DropdownMenu(expanded=expanded,onDismissRequest={ expanded=false }) {
+          SeatCommandPause.choices.forEach { ms ->
+            DropdownMenuItem(text={ Text(if(ms==0L) "No minimum pause" else "$ms ms") },
+              modifier=Modifier.heightIn(min=64.dp),onClick={ expanded=false;action(SettingsAction.CommandPause(ms)) })
+          }
+        }
+      }
+      Caption("Minimum time after release before the next command. Feedback time counts. Applies to the next load; unchanged feedback still stops loading.")
+    }
   }
 }
 @Composable private fun HomePanel(state:SettingsUiState,action:(SettingsAction)->Unit,confirm:(SettingsAction,String,String,String)->Unit) {

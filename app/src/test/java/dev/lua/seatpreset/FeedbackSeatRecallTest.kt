@@ -8,6 +8,7 @@ class FeedbackSeatRecallTest {
     var at=1_000L;var on=true;var visible=true;var gear=Gear.P;var brake:Boolean?=true
     var values=PositionFeedback.seatAxes.associateWith { PositionFeedback.Sample(50.0,100L) }
     val calls=mutableListOf<Pair<String,Int>>()
+    val callTimes=mutableListOf<Long>()
     var increasing=1
     override fun increasingSignal(axis:String)=increasing
     var releaseThrows=false
@@ -16,7 +17,8 @@ class FeedbackSeatRecallTest {
     override fun pause(ms:Long) { at+=ms;pauses+=ms;pauseHook?.invoke() }
     override fun enabled()=on
     override fun active()=visible
-    override fun vehicle()=VehicleSnapshot(gear,brake,null,at)
+    var vehicleHook:(()->Unit)?=null
+    override fun vehicle():VehicleSnapshot { vehicleHook?.invoke();return VehicleSnapshot(gear,brake,null,at) }
     val audits=mutableListOf<String>()
     val pauses=mutableListOf<Long>()
     var pauseHook:(()->Unit)?=null
@@ -24,7 +26,7 @@ class FeedbackSeatRecallTest {
     override fun read():Map<String,PositionFeedback.Sample> { readHook?.invoke();return values.toMap() }
     override fun audit(detail:String) { audits+=detail }
     override fun signal(axis:String,direction:Int) {
-      calls+=axis to direction
+      calls+=axis to direction;callTimes+=at
       if(direction==0) { if(releaseThrows)error("uncertain release");return }
       if(startThrows) error("uncertain start")
       if(!noFeedback) {
@@ -123,4 +125,56 @@ class FeedbackSeatRecallTest {
       val r=Rig();assertThrows(IllegalArgumentException::class.java) { FeedbackSeatRecall.run(r,target,1000) };assertTrue(r.calls.isEmpty())
     }
   }
+  @Test fun selectedMinimumGapIncludesFeedbackTimeAndCrossesAxisBoundaries() {
+    for(gap in SeatCommandPause.choices) {
+      val r=Rig()
+      FeedbackSeatRecall.run(r,mapOf("backrest" to 52.0,"height" to 51.0),1000,gap)
+      assertEquals(6,r.calls.size)
+      for(index in listOf(2,4)) assertTrue(r.callTimes[index]-r.callTimes[index-1]>=gap)
+      assertEquals(1000L,r.callTimes[0]) // First command is not delayed.
+      assertTrue(r.audits.any { it.contains("minimumPauseMs=$gap") })
+    }
+    val r=Rig();r.readHook={ r.at+=600 }
+    FeedbackSeatRecall.run(r,mapOf("backrest" to 52.0),1000,500)
+    assertTrue(r.pauses.all { it<=25 })
+    assertEquals(200L,r.pauses.sum()) // Existing feedback work already exceeds the minimum.
+  }
+  @Test fun cancellationAndParkLossDuringPauseNeverSendTheNextCommand() {
+    for(mode in 0..2) {
+      val r=Rig();r.pauseHook={ if(r.calls.size==2) { if(mode==0)r.visible=false else if(mode==1)r.gear=Gear.D else r.on=false } }
+      assertThrows(IllegalStateException::class.java) { FeedbackSeatRecall.run(r,mapOf("backrest" to 52.0),1000,500) }
+      assertEquals(listOf("backrest" to 1,"backrest" to 0),r.calls)
+      assertTrue(r.pauses.all { it<=25 })
+    }
+  }
+  @Test fun movementDuringAddedPauseStopsWithoutAnotherCommand() {
+    val r=Rig();var reads=0
+    r.readHook={ reads++;if(reads==3) r.values=r.values+("height" to PositionFeedback.Sample(51.0,102L)) }
+    assertThrows(IllegalStateException::class.java) { FeedbackSeatRecall.run(r,mapOf("backrest" to 52.0),1000,500) }
+    assertEquals(listOf("backrest" to 1,"backrest" to 0),r.calls)
+  }
+  @Test fun minimumPauseCannotRetryFlatFeedbackOrAcceptUnsupportedValues() {
+    val r=Rig();r.noFeedback=true
+    assertThrows(IllegalStateException::class.java) { FeedbackSeatRecall.run(r,mapOf("backrest" to 52.0),1000,500) }
+    assertEquals(2,r.calls.size)
+    for(gap in listOf(-1L,10L,2000L)) {
+      val invalid=Rig()
+      assertThrows(IllegalArgumentException::class.java) { FeedbackSeatRecall.run(invalid,mapOf("backrest" to 51.0),1000,gap) }
+      assertTrue(invalid.calls.isEmpty())
+    }
+  }
+
+  @Test fun slowGuardCannotRequestANegativePause() {
+    val r=Rig();var guards=0
+    r.vehicleHook={ if(r.calls.size==2) { guards++;if(guards==5)r.at+=600 } }
+    FeedbackSeatRecall.run(r,mapOf("backrest" to 52.0),1000,500)
+    assertTrue(r.pauses.all { it in 1L..25L })
+    assertTrue(r.callTimes[2]-r.callTimes[1]>=500)
+  }
+  @Test fun alreadyMatchedTargetDoesNotWaitOrDispatch() {
+    val r=Rig()
+    assertEquals(0,FeedbackSeatRecall.run(r,mapOf("backrest" to 50.0),1000,1000).pulses)
+    assertTrue(r.pauses.isEmpty());assertTrue(r.calls.isEmpty())
+  }
+
 }
