@@ -177,4 +177,17 @@ class FeedbackSeatRecallTest {
     assertTrue(r.pauses.isEmpty());assertTrue(r.calls.isEmpty())
   }
 
+  @Test fun symmetricOvershootIsNotReportedAsADirectionError() {
+    val r=Rig();r.overshoot=true
+    val error=assertThrows(IllegalStateException::class.java) { FeedbackSeatRecall.run(r,mapOf("backrest" to 52.0),1000) }
+    assertTrue(error.message.orEmpty().contains("passed its target"));assertEquals(listOf("backrest" to 1,"backrest" to 0),r.calls)
+  }
+  @Test fun delayedDriftAfterTargetIsLoggedWithoutCorrection() {
+    val r=Rig();var reads=0
+    r.readHook={ reads++;if(reads==3) r.values=r.values+("backrest" to PositionFeedback.Sample(52.0,102L)) }
+    val error=assertThrows(IllegalStateException::class.java) { FeedbackSeatRecall.run(r,mapOf("backrest" to 51.0),1000) }
+    assertTrue(error.message.orEmpty().contains("changed after matching"))
+    assertTrue(r.audits.any { it.startsWith("final-feedback-drift") });assertEquals(listOf("backrest" to 1,"backrest" to 0),r.calls)
+  }
+
 }

@@ -122,8 +122,8 @@ internal object FeedbackSeatRecall {
         val updated=checkNotNull(after) { "No advancing $axis feedback after release. Load stopped." }
         val next=wanted-updated.value
         port.audit("feedback axis=$axis before=${before.value} after=${updated.value} target=$wanted cacheAtNs=${updated.cacheAtNs} completion=unverified")
-        check(abs(next)<abs(error)) { "$axis did not move toward its target. Load stopped. Check its direction in Seat trials." }
         check(abs(next)<=TOLERANCE || error*next>0) { "$axis passed its target. No reverse correction was sent." }
+        check(abs(next)<abs(error)) { "$axis did not move toward its target. Load stopped. Check its direction in Seat trials." }
         fastestRate=maxOf(fastestRate,abs(updated.value-before.value)/duration)
         largestStep=maxOf(largestStep,abs(updated.value-before.value))
         check(PositionFeedback.seatAxes.filter { it!=axis }.all { other -> current[other]?.value==frameBefore[other]?.value }) { "Another seat axis changed. Load stopped." }
@@ -132,7 +132,9 @@ internal object FeedbackSeatRecall {
     guard()
     current=port.read()
     guard()
-    check(target.all { (axis,value)->current[axis]?.let { abs(it.value-value)<=TOLERANCE }==true }) { "Final seat feedback does not match the preset" }
+    val mismatches=target.filter { (axis,value)->current[axis]?.let { abs(it.value-value)<=TOLERANCE }!=true }
+    if(mismatches.isNotEmpty()) port.audit("final-feedback-drift mismatches=$mismatches observed=$current physicalStop=unverified reverseCommands=0")
+    check(mismatches.isEmpty()) { "Seat feedback changed after matching a target. Load stopped without correction." }
     return Outcome(pulses,moved)
   }
 }

@@ -1,5 +1,15 @@
 # Pre-alpha validation
 
+## 0.1.21 diagnostic build, 2026-11-09
+
+201 JVM tests passed in each demo/live debug/release variant. Required debug builds, stable-signed release builds and all four lint variants passed with zero errors. Both actual release APKs have the expected package, version 0.1.21/code 22, established public signing certificate and non-debuggable flag.
+
+The Android 11 demo UI passed duplicate-record blocking, physical-action marker capture, background cancellation, a complete independent SDK/ADB/Car-reader simulation with summary/private logs, and the one-start/one-release continuous simulation. The actual signed live APK updated the emulator without uninstalling and displayed a disabled continuous-trial control. No live probe or vehicle command was started. Screenshots remain ignored/local. A constantly refreshing summary initially prevented UI-inspector capture; the final UI refreshes once per second while sampling remains faster. The final reviewed build was retested. The emulator was closed afterwards.
+
+Tests cover bounded/cancelled/expired probe acceptance, malformed numeric values, raw zero remaining diagnostic-only, separate latency summaries, delayed post-release changes, strict typed Float/status/area/property checks, simulation start/release, stale feedback, cancellation, wrong direction, flat readings, overshoot and hold expiry, and the prior symmetric overshoot/final-drift cases. Native and public Car reflection bindings, actual read latency/cadence, physical stopping delay, continuous movement and overnight/car behavior remain unvalidated. See SEAT-FEEDBACK-PROBE.md for the next parked read-only test.
+
+The latest owner report describes no visible movement in a brief mirror trial. Trial logs are pending; no cause, command delivery or release behavior is inferred, and no mirror-control changes are based on this report.
+
 ## 0.1.20, 2026-11-06
 
 184 JVM tests passed in each demo/live debug/release variant. Required debug builds and debug lint passed. Both stable-signed release builds passed; release lint has zero errors. Both actual APKs have the expected package, version 0.1.20/code 21 and established signing certificate, and are not debuggable. New cases cover every pause option across axis boundaries, feedback time counting toward the minimum, cancellation/park loss/opt-out during waiting, slow safety checks, changed positions during an added wait, no blind retry, invalid pause choices and already-matched targets.

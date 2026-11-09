@@ -34,7 +34,7 @@ internal data class SettingsUiState(
 )
 internal enum class SettingsToggle { MOVEMENT, HOME, CHILD, STARTUP, CHECK_UPDATES, AUTO_UPDATES, DEVELOPER }
 internal enum class SettingsCommand { BACK, SETUP_HOME, RESET_PANEL, CAR_STARTUP, CHECK_UPDATES, INSTALL, INSTALLER, INSPECT,
-  PRIVATE_REPORT, CLEAR_PRIVATE, SETUP_LOG, COPY_LOG, EXPORT, IMPORT, RESTORE_CONNECTION, COPY_SETUP, DEMO, MOTION, KEEP_RECOVERY, SETUP_READS, TRUST_LAB, SEND_DIAGNOSTICS, SEAT_TRIALS, BACKREST_TEST }
+  PRIVATE_REPORT, CLEAR_PRIVATE, SETUP_LOG, COPY_LOG, EXPORT, IMPORT, RESTORE_CONNECTION, COPY_SETUP, DEMO, MOTION, KEEP_RECOVERY, SETUP_READS, TRUST_LAB, SEND_DIAGNOSTICS, SEAT_TRIALS, BACKREST_TEST, FEEDBACK_PROBE }
 internal sealed interface SettingsAction {
   data class Command(val command:SettingsCommand):SettingsAction
   data class Toggle(val setting:SettingsToggle,val enabled:Boolean):SettingsAction
@@ -268,6 +268,7 @@ internal fun SeatSettingsScreen(state:SettingsUiState,onAction:(SettingsAction)-
   fun send(command:SettingsCommand) { action(SettingsAction.Command(command)) }
   Section("Diagnostics") {
     TonalAction(if(state.demo) "Seat trials · simulation" else "Seat trials",Modifier.fillMaxWidth()) { send(SettingsCommand.BACKREST_TEST) }
+    TonalAction("Seat feedback",Modifier.fillMaxWidth()) { send(SettingsCommand.FEEDBACK_PROBE) }
     if(!state.demo) TonalAction("Inspect saved positions",Modifier.fillMaxWidth()) { send(SettingsCommand.INSPECT) }
     if (!state.demo) {
     TonalAction("Trusted ADB Lab certificate",Modifier.fillMaxWidth()) { send(SettingsCommand.TRUST_LAB) }

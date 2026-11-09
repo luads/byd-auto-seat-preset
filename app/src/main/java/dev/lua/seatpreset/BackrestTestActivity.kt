@@ -37,6 +37,7 @@ class BackrestTestActivity:Activity() {
   private lateinit var restored:Button
   private lateinit var end:Button
   private val parkBridge by lazy { OemReadBridge(applicationContext) }
+  @Volatile private var postReleaseTrace:PostReleaseTrace?=null
   private fun dp(n:Int)=(n*resources.displayMetrics.density).toInt()
   override fun onCreate(state:Bundle?) {
     super.onCreate(state)
@@ -149,6 +150,7 @@ class BackrestTestActivity:Activity() {
     dialog.setOnShowListener { dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled=false;check.setOnCheckedChangeListener { _,on->dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled=on } };dialog.show()
   }
   private fun pulse(axis:String,direction:Int,ms:Long) {
+    postReleaseTrace=null
     val requestedAt=SystemClock.elapsedRealtime();val token=generation;observed=false;hasAttempt=true
     start("Checking P, brake and native access…") {
       check(SeatMotionState.operations.beginMotion()) { "Another seat load or trial is running" }
@@ -179,7 +181,9 @@ class BackrestTestActivity:Activity() {
             }
           } finally {
             val released=runCatching { if(mirror) it?.mirrorTrialSignal(axis,0) else it?.signal(axis,0) }
-            SeatDiagnostics.event(this,trace,"nativeRelease axis=$axis attempted=true returned=${released.isSuccess} elapsedMs=${SystemClock.elapsedRealtime()-at} physicalStop=owner-check")
+            val releaseReturnedAt=SystemClock.elapsedRealtime()
+            postReleaseTrace=before[axis]?.let { initial->PostReleaseTrace(axis,initial,releaseReturnedAt) }
+            SeatDiagnostics.event(this,trace,"nativeRelease axis=$axis attempted=true returned=${released.isSuccess} elapsedMs=${releaseReturnedAt-at} releaseReturnedAtMs=$releaseReturnedAt physicalStop=owner-check")
             released.getOrThrow()
           }
         }
@@ -193,7 +197,7 @@ class BackrestTestActivity:Activity() {
     if(SystemClock.elapsedRealtime()>=observingUntil) { endObservation();return }
     if(!busy.compareAndSet(false,true)) { main.postDelayed({ observe(token) },500);return }
     worker.execute {
-      val result=runCatching { read() }.onSuccess { pulseAfter=it;log("after",it) }.onFailure { SeatDiagnostics.event(this,trace,"readbackFailed="+SeatDiagnostics.failure(it)) }
+      val result=runCatching { read() }.onSuccess { pulseAfter=it;log("after",it);postReleaseTrace?.observe(it,SystemClock.elapsedRealtime())?.let { detail->SeatDiagnostics.event(this,trace,detail) } }.onFailure { SeatDiagnostics.event(this,trace,"readbackFailed="+SeatDiagnostics.failure(it)) }
       busy.set(false)
       main.post {
         if(active) update()
